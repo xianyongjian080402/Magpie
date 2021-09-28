@@ -27,8 +27,8 @@ private:
 
 	D3D11_BOX _clientInFrame{};
 	HWND _hwndSrc = NULL;
-	ComPtr<ID3D11DeviceContext3> _d3dDC;
-	ComPtr<ID3D11Device3> _d3dDevice;
+	ComPtr<ID3D11DeviceContext1> _d3dDC;
+	ComPtr<ID3D11Device1> _d3dDevice;
 	ComPtr<ID3D11Texture2D> _output;
 };
 

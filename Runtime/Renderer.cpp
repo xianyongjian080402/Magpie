@@ -215,7 +215,12 @@ bool Renderer::_InitD3D() {
 #endif
 
 		D3D_FEATURE_LEVEL featureLevels[] = {
-			D3D_FEATURE_LEVEL_11_1
+			D3D_FEATURE_LEVEL_11_0,
+			D3D_FEATURE_LEVEL_10_1,
+			D3D_FEATURE_LEVEL_10_0,
+			D3D_FEATURE_LEVEL_9_3,
+			D3D_FEATURE_LEVEL_9_2,
+			D3D_FEATURE_LEVEL_9_1,
 		};
 
 		ComPtr<ID3D11Device> d3dDevice;
@@ -239,13 +244,13 @@ bool Renderer::_InitD3D() {
 		}
 		SPDLOG_LOGGER_INFO(logger, fmt::format("已创建 D3D Device\n\t功能级别：{}", featureLevel));
 
-		hr = d3dDevice.As<ID3D11Device3>(&_d3dDevice);
+		hr = d3dDevice.As<ID3D11Device1>(&_d3dDevice);
 		if (FAILED(hr)) {
 			SPDLOG_LOGGER_CRITICAL(logger, MakeComErrorMsg("获取 ID3D11Device5 失败", hr));
 			return false;
 		}
 
-		hr = d3dDC.As<ID3D11DeviceContext3>(&_d3dDC);
+		hr = d3dDC.As<ID3D11DeviceContext1>(&_d3dDC);
 		if (FAILED(hr)) {
 			SPDLOG_LOGGER_CRITICAL(logger, MakeComErrorMsg("获取 ID3D11DeviceContext4 失败", hr));
 			return false;

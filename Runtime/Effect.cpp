@@ -3,6 +3,7 @@
 #include "App.h"
 #include "Utils.h"
 #include <VertexTypes.h>
+#include <muParser.h>
 
 extern std::shared_ptr<spdlog::logger> logger;
 
@@ -66,9 +67,9 @@ bool Effect::InitializeFsr() {
 
 	_passDescs.resize(2);
 	_passDescs[0].inputs.push_back(0);
-	_passDescs[0].output = 1;
+	_passDescs[0].outputs.push_back(1);
 	_passDescs[1].inputs.push_back(1);
-	_passDescs[1].output = 2;
+	_passDescs[1].outputs.push_back(2);
 
 	ID3D11SamplerState*& sam = _samplers.emplace_back();
 	if (!renderer.GetSampler(Renderer::FilterType::LINEAR, &sam)) {
@@ -80,7 +81,6 @@ bool Effect::InitializeFsr() {
 	c1.type = EffectConstantType::Float;
 	c1.defaultValue = 0.87f;
 	c1.minValue = 0.0f;
-	c1.includeMin = false;
 	c1.name = "Sharpness";
 
 	for (int i = 0; i < 4; ++i) {
@@ -112,26 +112,14 @@ bool Effect::SetConstant(int index, float value) {
 
 	// 检查是否是合法的值
 	if (desc.minValue.index() == 1) {
-		if (desc.includeMin) {
-			if (value < std::get<float>(desc.minValue)) {
-				return false;
-			}
-		} else {
-			if (value <= std::get<float>(desc.minValue)) {
-				return false;
-			}
+		if (value < std::get<float>(desc.minValue)) {
+			return false;
 		}
 	}
 
 	if (desc.maxValue.index() == 1) {
-		if (desc.includeMax) {
-			if (value > std::get<float>(desc.maxValue)) {
-				return false;
-			}
-		} else {
-			if (value >= std::get<float>(desc.maxValue)) {
-				return false;
-			}
+		if (value > std::get<float>(desc.maxValue)) {
+			return false;
 		}
 	}
 
@@ -156,26 +144,14 @@ bool Effect::SetConstant(int index, int value) {
 
 	// 检查是否是合法的值
 	if (desc.minValue.index() == 2) {
-		if (desc.includeMin) {
-			if (value < std::get<int>(desc.minValue)) {
-				return false;
-			}
-		} else {
-			if (value <= std::get<int>(desc.minValue)) {
-				return false;
-			}
+		if (value < std::get<int>(desc.minValue)) {
+			return false;
 		}
 	}
 
 	if (desc.maxValue.index() == 2) {
-		if (desc.includeMax) {
-			if (value > std::get<int>(desc.maxValue)) {
-				return false;
-			}
-		} else {
-			if (value >= std::get<int>(desc.maxValue)) {
-				return false;
-			}
+		if (value > std::get<int>(desc.maxValue)) {
+			return false;
 		}
 	}
 
@@ -249,8 +225,8 @@ bool Effect::Build(ComPtr<ID3D11Texture2D> input, ComPtr<ID3D11Texture2D> output
 	}
 
 	for (int i = 0; i < _passes.size(); ++i) {
-		PassDesc& desc = _passDescs[i];
-		if (!_passes[i].Build(desc.inputs, desc.output, outputSize)
+		EffectPassDesc& desc = _passDescs[i];
+		if (!_passes[i].Build(desc.inputs, desc.outputs[0], outputSize)
 		) {
 			SPDLOG_LOGGER_ERROR(logger, fmt::format("构建 Pass{} 时出错", i + 1));
 			return false;
@@ -320,7 +296,7 @@ bool Effect::_Pass::Build(const std::vector<int>& inputs, int output, std::optio
 	float outputLeft, outputTop, outputRight, outputBottom;
 	if (outputSize.has_value() && (outputTextureSize.cx != outputSize->cx || outputTextureSize.cy != outputSize->cy)) {
 		outputLeft = std::floorf(((float)outputTextureSize.cx - outputSize->cx) / 2) * 2 / outputTextureSize.cx - 1;
-		outputTop = 1 - std::ceilf(((float)outputTextureSize.cy - outputSize->cy) / 2) * 2 / outputTextureSize.cy;
+		outputTop = 1 - std::floorf(((float)outputTextureSize.cy - outputSize->cy) / 2) * 2 / outputTextureSize.cy;
 		outputRight = outputLeft + 2 * outputSize->cx / (float)outputTextureSize.cx;
 		outputBottom = outputTop - 2 * outputSize->cy / (float)outputTextureSize.cy;
 

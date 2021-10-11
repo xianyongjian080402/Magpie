@@ -29,4 +29,28 @@ public:
 	static bool ReadTextFile(const wchar_t* fileName, std::string& result);
 
 	static bool CompilePixelShader(const char* hlsl, size_t hlslLen, ID3DBlob** blob);
+
+	static const RTL_OSVERSIONINFOW& GetOSVersion();
+
+	static int CompareVersion(int major1, int minor1, int build1, int major2, int minor2, int build2);
+
+	template<typename Elem>
+	static std::basic_string<Elem> ToUpperCase(std::basic_string_view<Elem> str) {
+		std::basic_string<Elem> result(str);
+		std::transform(result.begin(), result.end(), result.begin(), std::toupper);
+		return result;
+	}
+
+	template<typename T>
+	class ScopeExit {
+	public:
+		ScopeExit(const ScopeExit&) = delete;
+		ScopeExit(ScopeExit&&) = delete;
+
+		explicit ScopeExit(T&& exitScope) : _exitScope(std::forward<T>(exitScope)) {}
+		~ScopeExit() { _exitScope(); }
+
+	private:
+		T _exitScope;
+	};
 };

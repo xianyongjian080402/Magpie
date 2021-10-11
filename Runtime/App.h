@@ -13,20 +13,17 @@ public:
 		return *instance;
 	}
 
-	bool Initialize(
-		HINSTANCE hInst,
+	bool Initialize(HINSTANCE hInst);
+
+	bool Run(
 		HWND hwndSrc,
 		int captureMode,
 		bool adjustCursorSpeed,
 		bool showFPS,
+		bool disableRoundCorner,
+		int frameRate,
 		float fsrSharpness
 	);
-
-	void Run();
-
-	std::shared_ptr<spdlog::logger> GetLogger() const {
-		return _logger;
-	}
 
 	HINSTANCE GetHInstance() const {
 		return _hInst;
@@ -68,15 +65,19 @@ public:
 		return _captureMode;
 	}
 
+	int GetFrameRate() const {
+		return _frameRate;
+	}
+
 	float GetFsrSharpness() const {
 		return _fsrSharpness;
 	}
 
-	static const wchar_t* GetErrorMsg() {
+	static const char* GetErrorMsg() {
 		return _errorMsg;
 	}
 
-	static void SetErrorMsg(const wchar_t* errorMsg) {
+	void SetErrorMsg(const char* errorMsg) {
 		_errorMsg = errorMsg;
 	}
 
@@ -84,6 +85,8 @@ public:
 
 private:
 	App() {}
+
+	void _Run();
 
 	void _RegisterHostWndClass() const;
 
@@ -96,7 +99,7 @@ private:
 
 	void _ReleaseResources();
 
-	static const wchar_t* _errorMsg;
+	static const char* _errorMsg;
 
 	// 全屏窗口类名
 	static constexpr const wchar_t* _HOST_WINDOW_CLASS_NAME = L"Window_Magpie_967EB565-6F73-4E94-AE53-00CC42592A22";
@@ -112,11 +115,10 @@ private:
 	int _captureMode = 0;
 	bool _adjustCursorSpeed = false;
 	bool _showFPS = false;
+	int _frameRate = 0;
 	float _fsrSharpness = 0;
 
 	std::unique_ptr<Renderer> _renderer;
 	std::unique_ptr<FrameSourceBase> _frameSource;
 	ComPtr<IWICImagingFactory2> _wicImgFactory;
-
-	std::shared_ptr<spdlog::logger> _logger;
 };

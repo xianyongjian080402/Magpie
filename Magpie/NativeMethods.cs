@@ -116,15 +116,20 @@ namespace Magpie {
 		[DllImport("ntdll.dll", SetLastError = true)]
 		private static extern uint RtlGetVersion(ref OsVersionInfo versionInformation);
 
+		private static Version version = null;
 		public static Version GetOSVersion() {
-			OsVersionInfo osVersionInfo = new OsVersionInfo();
-			osVersionInfo.dwOSVersionInfoSize = (uint)Marshal.SizeOf(osVersionInfo);
-			_ = RtlGetVersion(ref osVersionInfo);
-			return new Version(
-				(int)osVersionInfo.dwMajorVersion,
-				(int)osVersionInfo.dwMinorVersion,
-				(int)osVersionInfo.dwBuildNumber
+			if (version == null) {
+				OsVersionInfo osVersionInfo = new OsVersionInfo();
+				osVersionInfo.dwOSVersionInfoSize = (uint)Marshal.SizeOf(osVersionInfo);
+				_ = RtlGetVersion(ref osVersionInfo);
+				version = new Version(
+					(int)osVersionInfo.dwMajorVersion,
+					(int)osVersionInfo.dwMinorVersion,
+					(int)osVersionInfo.dwBuildNumber
 				);
+			}
+
+			return version;
 		}
 
 		private static readonly int LOCALE_NAME_MAX_LENGTH = 85;
@@ -142,16 +147,35 @@ namespace Magpie {
          * Runtime.dll
          */
 
-		public delegate void ReportStatus(int status, IntPtr errorMsg);
+		[DllImport("Runtime", CallingConvention = CallingConvention.StdCall)]
+		[return: MarshalAs(UnmanagedType.Bool)]
+		public static extern bool Initialize(int logLevel);
 
 		[DllImport("Runtime", CallingConvention = CallingConvention.StdCall)]
-		public static extern void Run(
-			ReportStatus reportStatus,
+		public static extern void SetLogLevel(int logLevel);
+
+		[DllImport("Runtime", EntryPoint = "Run", CallingConvention = CallingConvention.StdCall)]
+		private static extern IntPtr RunNative(
 			IntPtr hwndSrc,
 			int captureMode,
 			[MarshalAs(UnmanagedType.U1)] bool adjustCursorSpeed,
 			[MarshalAs(UnmanagedType.U1)] bool showFPS,
+			[MarshalAs(UnmanagedType.U1)] bool disableRoundCorner,
+			int frameRate,
 			float fsrSharpness
 		);
+
+		public static string Run(
+			IntPtr hwndSrc,
+			int captureMode,
+			bool adjustCursorSpeed,
+			bool showFPS,
+			bool disableRoundCorner,
+			int frameRate,
+			float fsrSharpness
+		) {
+			IntPtr msg = RunNative(hwndSrc, captureMode, adjustCursorSpeed, showFPS, disableRoundCorner, frameRate, fsrSharpness);
+			return Marshal.PtrToStringAnsi(msg);
+		}
 	}
 }

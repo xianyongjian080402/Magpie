@@ -4,9 +4,10 @@
 
 #include "pch.h"
 #include "App.h"
+#include "Utils.h"
 
 
-HINSTANCE hInst = NULL;
+static HINSTANCE hInst = NULL;
 std::shared_ptr<spdlog::logger> logger = nullptr;
 
 // DLL 入口
@@ -30,48 +31,65 @@ BOOL APIENTRY DllMain(
 	return TRUE;
 }
 
+// 日志级别：
+// 0：TRACE，1：DEBUG，...，6：OFF
+API_DECLSPEC void WINAPI SetLogLevel(int logLevel) {
+	assert(logger);
 
-void InitLogger() {
-	logger = spdlog::rotating_logger_mt(".", "logs/Runtime.log", 100000, 1);
-	logger->set_level(spdlog::level::info);
-	logger->set_pattern("%Y-%m-%d %H:%M:%S.%e|%l|%s:%!|%v");
-	logger->flush_on(spdlog::level::warn);
-	spdlog::flush_every(std::chrono::seconds(5));
+	logger->flush();
+	logger->set_level((spdlog::level::level_enum)logLevel);
+	static const char* LOG_LEVELS[7] = { "TRACE", "DEBUG", "INFO", "WARN", "ERROR", "CRITICAL", "OFF" };
+	SPDLOG_LOGGER_INFO(logger, fmt::format("当前日志级别：{}", LOG_LEVELS[logLevel]));
 }
 
-API_DECLSPEC void WINAPI Run(
-	void reportStatus(int status, const wchar_t* errorMsgId),
+
+API_DECLSPEC BOOL WINAPI Initialize(int logLevel) {
+	// 初始化日志
+	try {
+		logger = spdlog::rotating_logger_mt(".", "logs/Runtime.log", 100000, 1);
+		logger->set_level((spdlog::level::level_enum)logLevel);
+		logger->set_pattern("%Y-%m-%d %H:%M:%S.%e|%l|%s:%!|%v");
+		logger->flush_on(spdlog::level::warn);
+		spdlog::flush_every(std::chrono::seconds(5));
+	} catch (const spdlog::spdlog_ex&) {
+		return FALSE;
+	}
+
+	SetLogLevel(logLevel);
+
+	// 初始化 App
+	App& app = App::GetInstance();
+	if (!app.Initialize(hInst)) {
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+API_DECLSPEC const char* WINAPI Run(
 	HWND hwndSrc,
 	int captureMode,
 	bool adjustCursorSpeed,
 	bool showFPS,
+	bool disableRoundCorner,
+	int frameRate,	// 0：垂直同步，负数：不限帧率，正数：限制的帧率
 	float fsrSharpness
 ) {
-	reportStatus(1, nullptr);
+	SPDLOG_LOGGER_INFO(logger, fmt::format("运行时参数：\n\thwndSrc：{}\n\tcaptureMode：{}\n\tadjustCursorSpeed：{}\n\tshowFPS：{}\n\tdisableRoundCorner：{}\n\tframeRate：{}", (void*)hwndSrc, captureMode, adjustCursorSpeed, showFPS, disableRoundCorner, frameRate));
 
-	if (!logger) {
-		try {
-			InitLogger();
-		} catch (const spdlog::spdlog_ex&) {
-			// 初始化日志失败，直接退出
-			reportStatus(0, ErrorMessages::INIT_LOGGER);
-			return;
-		}
-	}
+	const auto& version = Utils::GetOSVersion();
+	SPDLOG_LOGGER_INFO(logger, fmt::format("OS 版本：{}.{}.{}",
+		version.dwMajorVersion, version.dwMinorVersion, version.dwBuildNumber));
 
 	App& app = App::GetInstance();
-	if (!app.Initialize(hInst, hwndSrc, captureMode, adjustCursorSpeed, showFPS, fsrSharpness)) {
+	if (!app.Run(hwndSrc, captureMode, adjustCursorSpeed, showFPS, disableRoundCorner, frameRate, fsrSharpness)) {
 		// 初始化失败
-		SPDLOG_LOGGER_INFO(logger, "App 初始化失败，返回 GENREIC 消息");
-		reportStatus(0, App::GetErrorMsg());
-		return;
+		SPDLOG_LOGGER_INFO(logger, "App.Run 失败");
+		return app.GetErrorMsg();
 	}
 
-	SPDLOG_LOGGER_INFO(logger, "汇报初始化完成");
-	reportStatus(2, nullptr);
+	SPDLOG_LOGGER_INFO(logger, "即将退出");
+	logger->flush();
 
-	app.Run();
-
-	SPDLOG_LOGGER_INFO(logger, "汇报已退出");
-	reportStatus(0, nullptr);
+	return nullptr;
 }

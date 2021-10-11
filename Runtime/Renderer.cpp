@@ -6,6 +6,7 @@
 #include "shaders/CopyPS.h"
 #include "shaders/SimpleVS.h"
 #include <VertexTypes.h>
+#include "EffectCompiler.h"
 
 extern std::shared_ptr<spdlog::logger> logger;
 
@@ -19,6 +20,17 @@ bool Renderer::Initialize() {
 	if (!_InitD3D()) {
 		return false;
 	}
+
+	int frameRate = App::GetInstance().GetFrameRate();
+	
+	if (frameRate > 0) {
+		_timer.SetFixedTimeStep(true);
+		_timer.SetTargetElapsedSeconds(1.0 / frameRate);
+	} else {
+		_timer.SetFixedTimeStep(false);
+	}
+	
+	_timer.ResetElapsedTime();
 
 	return true;
 }
@@ -70,36 +82,11 @@ bool Renderer::InitializeEffectsAndCursor() {
 
 
 void Renderer::Render() {
-	if (!_waitingForNextFrame) {
-		WaitForSingleObject(_frameLatencyWaitableObject, 1000);
-	}
-
-	if (!_CheckSrcState()) {
-		SPDLOG_LOGGER_INFO(logger, "源窗口状态改变，退出全屏");
-		DestroyWindow(App::GetInstance().GetHwndHost());
-		return;
-	}
-	
-	_waitingForNextFrame = !App::GetInstance().GetFrameSource().Update();
 	if (_waitingForNextFrame) {
-		return;
+		_Render();
+	} else {
+		_timer.Tick(std::bind(&Renderer::_Render, this));
 	}
-
-	_d3dDC->ClearState();
-	// 所有渲染都使用三角形带拓扑
-	_d3dDC->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
-
-	for (Effect& effect : _effects) {
-		effect.Draw();
-	}
-
-	if (App::GetInstance().IsShowFPS()) {
-		_frameRateRenderer.Draw();
-	}
-	
-	_cursorRenderer.Draw();
-	
-	_dxgiSwapChain->Present(0, 0);
 }
 
 bool Renderer::GetRenderTargetView(ID3D11Texture2D* texture, ID3D11RenderTargetView** result) {
@@ -215,12 +202,10 @@ bool Renderer::_InitD3D() {
 #endif
 
 		D3D_FEATURE_LEVEL featureLevels[] = {
+			D3D_FEATURE_LEVEL_11_1,
 			D3D_FEATURE_LEVEL_11_0,
 			D3D_FEATURE_LEVEL_10_1,
-			D3D_FEATURE_LEVEL_10_0,
-			D3D_FEATURE_LEVEL_9_3,
-			D3D_FEATURE_LEVEL_9_2,
-			D3D_FEATURE_LEVEL_9_1,
+			D3D_FEATURE_LEVEL_10_0
 		};
 
 		ComPtr<ID3D11Device> d3dDevice;
@@ -246,13 +231,13 @@ bool Renderer::_InitD3D() {
 
 		hr = d3dDevice.As<ID3D11Device1>(&_d3dDevice);
 		if (FAILED(hr)) {
-			SPDLOG_LOGGER_CRITICAL(logger, MakeComErrorMsg("获取 ID3D11Device5 失败", hr));
+			SPDLOG_LOGGER_CRITICAL(logger, MakeComErrorMsg("获取 ID3D11Device1 失败", hr));
 			return false;
 		}
 
 		hr = d3dDC.As<ID3D11DeviceContext1>(&_d3dDC);
 		if (FAILED(hr)) {
-			SPDLOG_LOGGER_CRITICAL(logger, MakeComErrorMsg("获取 ID3D11DeviceContext4 失败", hr));
+			SPDLOG_LOGGER_CRITICAL(logger, MakeComErrorMsg("获取 ID3D11DeviceContext1 失败", hr));
 			return false;
 		}
 	}
@@ -260,10 +245,16 @@ bool Renderer::_InitD3D() {
 	{
 		ComPtr<IDXGIFactory2> dxgiFactory;
 
-		hr = _d3dDevice.As<IDXGIDevice4>(&_dxgiDevice);
+		hr = _d3dDevice.As<IDXGIDevice1>(&_dxgiDevice);
 		if (FAILED(hr)) {
 			SPDLOG_LOGGER_CRITICAL(logger, MakeComErrorMsg("获取 IDXGIDevice 失败", hr));
 			return false;
+		}
+
+		// 将 GPU 优先级设为最高，不一定有用
+		hr = _dxgiDevice->SetGPUThreadPriority(7);
+		if (FAILED(hr)) {
+			SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("SetGPUThreadPriority", hr));
 		}
 
 		ComPtr<IDXGIAdapter> dxgiAdapter;
@@ -279,16 +270,38 @@ bool Renderer::_InitD3D() {
 			return false;
 		}
 
+		// 检查可变帧率支持
+		BOOL supportTearing = FALSE;
+		ComPtr<IDXGIFactory5> dxgiFactory5;
+		hr = dxgiFactory.As<IDXGIFactory5>(&dxgiFactory5);
+		if (FAILED(hr)) {
+			SPDLOG_LOGGER_WARN(logger, MakeComErrorMsg("获取 IDXGIFactory5 失败", hr));
+		} else {
+			hr = dxgiFactory5->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &supportTearing, sizeof(supportTearing));
+			if (FAILED(hr)) {
+				SPDLOG_LOGGER_WARN(logger, MakeComErrorMsg("CheckFeatureSupport 失败", hr));
+			}
+		}
+		SPDLOG_LOGGER_INFO(logger, fmt::format("可变刷新率支持：{}", supportTearing ? "是" : "否"));
+
+		int frameRate = App::GetInstance().GetFrameRate();
+		if (frameRate != 0 && !supportTearing) {
+			SPDLOG_LOGGER_CRITICAL(logger, "当前显示器不支持可变刷新率，初始化失败");
+			App::GetInstance().SetErrorMsg(ErrorMessages::VSYNC_OFF_NOT_SUPPORTED);
+			return false;
+		}
+
 		DXGI_SWAP_CHAIN_DESC1 sd = {};
 		sd.Width = hostSize.cx;
 		sd.Height = hostSize.cy;
 		sd.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+		sd.AlphaMode = DXGI_ALPHA_MODE_IGNORE;
 		sd.SampleDesc.Count = 1;
 		sd.SampleDesc.Quality = 0;
 		sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT | DXGI_USAGE_SHADER_INPUT;
 		sd.BufferCount = 2;
-		sd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
-		sd.Flags = DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
+		sd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+		sd.Flags = frameRate != 0 ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
 
 		ComPtr<IDXGISwapChain1> dxgiSwapChain = nullptr;
 		hr = dxgiFactory->CreateSwapChainForHwnd(
@@ -304,18 +317,59 @@ bool Renderer::_InitD3D() {
 			return false;
 		}
 
-		hr = dxgiSwapChain.As<IDXGISwapChain4>(&_dxgiSwapChain);
+		hr = dxgiSwapChain.As<IDXGISwapChain2>(&_dxgiSwapChain);
 		if (FAILED(hr)) {
-			SPDLOG_LOGGER_CRITICAL(logger, MakeComErrorMsg("获取 IDXGISwapChain4 失败", hr));
+			SPDLOG_LOGGER_CRITICAL(logger, MakeComErrorMsg("获取 IDXGISwapChain2 失败", hr));
 			return false;
 		}
 		
-		_frameLatencyWaitableObject = _dxgiSwapChain->GetFrameLatencyWaitableObject();
+		if (frameRate != 0) {
+			hr = _dxgiDevice->SetMaximumFrameLatency(1);
+			if (FAILED(hr)) {
+				SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("SetMaximumFrameLatency 失败", hr));
+			}
+		} else {
+			_frameLatencyWaitableObject = _dxgiSwapChain->GetFrameLatencyWaitableObject();
+		}
 		
 		hr = dxgiFactory->MakeWindowAssociation(App::GetInstance().GetHwndHost(), DXGI_MWA_NO_ALT_ENTER);
 		if (FAILED(hr)) {
 			SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("MakeWindowAssociation 失败", hr));
 		}
+
+		// 检查 Multiplane Overlay 支持
+		BOOL supportMPO = FALSE;
+		ComPtr<IDXGIOutput> output;
+		hr = _dxgiSwapChain->GetContainingOutput(&output);
+		if (FAILED(hr)) {
+			SPDLOG_LOGGER_WARN(logger, MakeComErrorMsg("获取 IDXGIOutput 失败", hr));
+		} else {
+			ComPtr<IDXGIOutput2> output2;
+			hr = output.As<IDXGIOutput2>(&output2);
+			if (FAILED(hr)) {
+				SPDLOG_LOGGER_WARN(logger, MakeComErrorMsg("获取 IDXGIOutput2 失败", hr));
+			} else {
+				supportMPO = output2->SupportsOverlays();
+			}
+		}
+		SPDLOG_LOGGER_INFO(logger, fmt::format("Multiplane Overlay 支持：{}", supportMPO ? "是" : "否"));
+
+		// 检查 Hardware Composition 支持
+		BOOL supportHardwareComposition = FALSE;
+		ComPtr<IDXGIOutput6> output6;
+		hr = output.As<IDXGIOutput6>(&output6);
+		if (FAILED(hr)) {
+			SPDLOG_LOGGER_WARN(logger, MakeComErrorMsg("获取 IDXGIOutput6 失败", hr));
+		} else {
+			UINT flags;
+			hr = output6->CheckHardwareCompositionSupport(&flags);
+			if (FAILED(hr)) {
+				SPDLOG_LOGGER_WARN(logger, MakeComErrorMsg("CheckHardwareCompositionSupport 失败", hr));
+			} else {
+				supportHardwareComposition = flags & DXGI_HARDWARE_COMPOSITION_SUPPORT_FLAG_WINDOWED;
+			}
+		}
+		SPDLOG_LOGGER_INFO(logger, fmt::format("Hardware Composition 支持：{}", supportHardwareComposition ? "是" : "否"));
 	}
 
 	hr = _dxgiSwapChain->GetBuffer(0, IID_PPV_ARGS(&_backBuffer));
@@ -326,6 +380,45 @@ bool Renderer::_InitD3D() {
 
 	SPDLOG_LOGGER_INFO(logger, "Renderer 初始化完成");
 	return true;
+}
+
+void Renderer::_Render() {
+	int frameRate = App::GetInstance().GetFrameRate();
+
+	if (!_waitingForNextFrame && frameRate == 0) {
+		WaitForSingleObjectEx(_frameLatencyWaitableObject, 1000, TRUE);
+	}
+
+	if (!_CheckSrcState()) {
+		SPDLOG_LOGGER_INFO(logger, "源窗口状态改变，退出全屏");
+		DestroyWindow(App::GetInstance().GetHwndHost());
+		return;
+	}
+
+	_waitingForNextFrame = !App::GetInstance().GetFrameSource().Update();
+	if (_waitingForNextFrame) {
+		return;
+	}
+
+	_d3dDC->ClearState();
+	// 所有渲染都使用三角形带拓扑
+	_d3dDC->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+
+	for (Effect& effect : _effects) {
+		effect.Draw();
+	}
+
+	if (App::GetInstance().IsShowFPS()) {
+		_frameRateRenderer.Draw();
+	}
+
+	_cursorRenderer.Draw();
+
+	if (frameRate != 0) {
+		_dxgiSwapChain->Present(0, DXGI_PRESENT_ALLOW_TEARING);
+	} else {
+		_dxgiSwapChain->Present(1, 0);
+	}
 }
 
 bool Renderer::_CheckSrcState() {

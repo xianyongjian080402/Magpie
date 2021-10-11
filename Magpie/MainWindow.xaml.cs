@@ -99,6 +99,8 @@ namespace Magpie {
 		}
 
 		private void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e) {
+			magWindow.Dispose();
+
 			if (Settings.Default.MinimizeWhenClose) {
 				WindowState = WindowState.Minimized;
 				e.Cancel = true;
@@ -137,26 +139,39 @@ namespace Magpie {
 				UpdateLayout();
 			}
 
-			if (magWindow.Status == MagWindowStatus.Running) {
+			if (magWindow.Running) {
 				Logger.Info("通过热键退出全屏");
 				magWindow.Destory();
-				return;
-			}
-
-			if (magWindow.Status == MagWindowStatus.Starting) {
-				Logger.Info("全屏窗口正在启动中，忽略切换全屏的请求");
 				return;
 			}
 
 			bool showFPS = Settings.Default.ShowFPS;
 			int captureMode = Settings.Default.CaptureMode;
 			bool adjustCursorSpeed = Settings.Default.AdjustCursorSpeed;
+			bool disableRoundCorner = Settings.Default.DisableRoundCorner;
 			float fsrSharpness = Settings.Default.FsrSharpness;
+
+			int frameRate = 0;
+			switch (Settings.Default.FrameRateType) {
+				case 1:
+					// 不限帧率
+					frameRate = -1;
+					break;
+				case 2:
+					// 限制帧率
+					frameRate = Settings.Default.FrameRateLimit;
+					break;
+				default:
+					// 垂直同步
+					break;
+			}
 
 			magWindow.Create(
 				captureMode,
 				showFPS,
 				adjustCursorSpeed,
+				disableRoundCorner,
+				frameRate,
 				fsrSharpness
 			);
 
@@ -282,6 +297,10 @@ namespace Magpie {
 
 		private void BtnCancelRestore_Click(object sender, RoutedEventArgs e) {
 			StopWaitingForRestore();
+		}
+
+		public void SetRuntimeLogLevel(int logLevel) {
+			magWindow.SetLogLevel(logLevel);
 		}
 	}
 

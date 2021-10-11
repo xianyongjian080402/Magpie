@@ -136,7 +136,7 @@ bool Utils::ReadTextFile(const wchar_t* fileName, std::string& result) {
 	result.resize(static_cast<size_t>(size) + 1, 0);
 
 	size_t readed = fread(result.data(), 1, size, hFile);
-	result.resize(readed + 1);
+	result.resize(readed);
 
 	fclose(hFile);
 	return true;
@@ -157,4 +157,42 @@ bool Utils::CompilePixelShader(const char* hlsl, size_t hlslLen, ID3DBlob** blob
     }
 
     return true;
+}
+
+
+
+const RTL_OSVERSIONINFOW& Utils::GetOSVersion() {
+	static RTL_OSVERSIONINFOW version{};
+
+	if (version.dwMajorVersion == 0) {
+		HMODULE hNtDll = LoadLibrary(L"ntdll.dll");
+		if (hNtDll == NULL) {
+			SPDLOG_LOGGER_CRITICAL(logger, MakeWin32ErrorMsg("加载 ntdll.dll 失败"));
+			assert(false);
+		}
+
+		auto rtlGetVersion = (LONG(WINAPI*)(PRTL_OSVERSIONINFOW))GetProcAddress(hNtDll, "RtlGetVersion");
+		if (rtlGetVersion == nullptr) {
+			SPDLOG_LOGGER_CRITICAL(logger, MakeWin32ErrorMsg("获取 RtlGetVersion 地址失败"));
+			assert(false);
+		}
+
+		rtlGetVersion(&version);
+
+		FreeLibrary(hNtDll);
+	}
+	
+	return version;
+}
+
+int Utils::CompareVersion(int major1, int minor1, int build1, int major2, int minor2, int build2) {
+	if (major1 != major2) {
+		return major1 - major2;
+	}
+
+	if (minor1 != minor2) {
+		return minor1 - minor2;
+	} else {
+		return build1 - build2;
+	}
 }

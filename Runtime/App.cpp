@@ -9,8 +9,8 @@
 
 extern std::shared_ptr<spdlog::logger> logger;
 
-const wchar_t* App::_errorMsg = ErrorMessages::GENERIC;
 const UINT App::_WM_DESTORYHOST = RegisterWindowMessage(L"MAGPIE_WM_DESTORYHOST");
+const char* App::_errorMsg = ErrorMessages::GENERIC;
 
 
 App::~App() {
@@ -18,47 +18,48 @@ App::~App() {
 	Windows::Foundation::Uninitialize();
 }
 
-bool App::Initialize(
-	HINSTANCE hInst,
+bool App::Initialize(HINSTANCE hInst) {
+	SPDLOG_LOGGER_INFO(logger, "正在初始化 App");
+
+	_hInst = hInst;
+
+	// 初始化 COM
+	HRESULT hr = Windows::Foundation::Initialize(RO_INIT_MULTITHREADED);
+	if (FAILED(hr)) {
+		SPDLOG_LOGGER_CRITICAL(logger, MakeComErrorMsg("初始化 COM 失败", hr));
+		return false;
+	}
+	SPDLOG_LOGGER_INFO(logger, "已初始化 COM");
+
+	// 注册主窗口类
+	_RegisterHostWndClass();
+
+	// 供隐藏光标和 MagCallback 抓取模式使用
+	if (!MagInitialize()) {
+		SPDLOG_LOGGER_ERROR(logger, MakeWin32ErrorMsg("MagInitialize 失败"));
+	}
+
+	SPDLOG_LOGGER_INFO(logger, "App 初始化成功");
+	return true;
+}
+
+bool App::Run(
 	HWND hwndSrc,
 	int captureMode,
 	bool adjustCursorSpeed,
 	bool showFPS,
+	bool disableRoundCorner,
+	int frameRate,
 	float fsrSharpness
 ) {
-	_logger = logger;
 	_hwndSrc = hwndSrc;
-	_hInst = hInst;
-
 	_captureMode = captureMode;
 	_adjustCursorSpeed = adjustCursorSpeed;
 	_showFPS = showFPS;
+	_frameRate = frameRate;
 	_fsrSharpness = fsrSharpness;
-
-	SPDLOG_LOGGER_INFO(logger, "正在初始化 App");
+	
 	SetErrorMsg(ErrorMessages::GENERIC);
-
-	// 确保只初始化一次
-	static bool initalized = false;
-	if (!initalized) {
-		// 初始化 COM
-		HRESULT hr = Windows::Foundation::Initialize(RO_INIT_MULTITHREADED);
-		if (FAILED(hr)) {
-			SPDLOG_LOGGER_CRITICAL(logger, MakeComErrorMsg("初始化 COM 失败", hr));
-			return false;
-		}
-		SPDLOG_LOGGER_INFO(logger, "已初始化 COM");
-
-		// 注册主窗口类
-		_RegisterHostWndClass();
-
-		// 供隐藏光标和 MagCallback 抓取模式使用
-		if (!MagInitialize()) {
-			SPDLOG_LOGGER_ERROR(logger, MakeWin32ErrorMsg("MagInitialize 失败"));
-		}
-
-		initalized = true;
-	}
 
 	_srcClientRect = Utils::GetClientScreenRect(_hwndSrc);
 	if (_srcClientRect.right == 0 || _srcClientRect.bottom == 0) {
@@ -78,7 +79,7 @@ bool App::Initialize(
 	if (!_renderer->Initialize()) {
 		SPDLOG_LOGGER_CRITICAL(logger, "初始化 Renderer 失败，正在清理");
 		DestroyWindow(_hwndHost);
-		Run();
+		_Run();
 		return false;
 	}
 	
@@ -98,30 +99,54 @@ bool App::Initialize(
 	default:
 		SPDLOG_LOGGER_CRITICAL(logger, "未知的捕获模式，即将退出");
 		DestroyWindow(_hwndHost);
-		Run();
+		_Run();
 		return false;
 	}
 	
 	if (!_frameSource->Initialize()) {
 		SPDLOG_LOGGER_CRITICAL(logger, "初始化 FrameSource 失败，即将退出");
 		DestroyWindow(_hwndHost);
-		Run();
+		_Run();
 		return false;
 	}
 
 	if (!_renderer->InitializeEffectsAndCursor()) {
 		SPDLOG_LOGGER_CRITICAL(logger, "初始化效果失败，即将退出");
 		DestroyWindow(_hwndHost);
-		Run();
+		_Run();
 		return false;
 	}
 
-	SPDLOG_LOGGER_INFO(logger, "App 初始化成功");
+	const auto& version = Utils::GetOSVersion();
+	bool isWin11 = Utils::CompareVersion(
+		version.dwMajorVersion, version.dwMinorVersion,
+		version.dwBuildNumber, 10, 0, 22000) >= 0;
+
+	if (disableRoundCorner && isWin11) {
+		INT attr = DWMWCP_DONOTROUND;
+		HRESULT hr = DwmSetWindowAttribute(hwndSrc, DWMWA_WINDOW_CORNER_PREFERENCE, &attr, sizeof(attr));
+		if (FAILED(hr)) {
+			SPDLOG_LOGGER_ERROR(logger, "禁用窗口圆角失败");
+			disableRoundCorner = false;
+		} else {
+			SPDLOG_LOGGER_INFO(logger, "已禁用窗口圆角");
+		}
+	}
+
+	_Run();
+
+	if (disableRoundCorner && isWin11) {
+		INT attr = DWMWCP_DEFAULT;
+		DwmSetWindowAttribute(hwndSrc, DWMWA_WINDOW_CORNER_PREFERENCE, &attr, sizeof(attr));
+
+		SPDLOG_LOGGER_INFO(logger, "已取消禁用窗口圆角");
+	}
+
 	return true;
 }
 
-void App::Run() {
-	SPDLOG_LOGGER_INFO(_logger, "开始接收窗口消息");
+void App::_Run() {
+	SPDLOG_LOGGER_INFO(logger, "开始接收窗口消息");
 
 	while (true) {
 		MSG msg;
@@ -129,7 +154,7 @@ void App::Run() {
 			if (msg.message == WM_QUIT) {
 				// 释放资源
 				_ReleaseResources();
-				SPDLOG_LOGGER_INFO(_logger, "主窗口已销毁");
+				SPDLOG_LOGGER_INFO(logger, "主窗口已销毁");
 				return;
 			}
 
@@ -169,16 +194,16 @@ void App::_RegisterHostWndClass() const {
 
 	if (!RegisterClassEx(&wcex)) {
 		// 忽略此错误，因为可能是重复注册产生的错误
-		SPDLOG_LOGGER_ERROR(_logger, MakeWin32ErrorMsg("注册主窗口类失败"));
+		SPDLOG_LOGGER_ERROR(logger, MakeWin32ErrorMsg("注册主窗口类失败"));
 	} else {
-		SPDLOG_LOGGER_INFO(_logger, "已注册主窗口类");
+		SPDLOG_LOGGER_INFO(logger, "已注册主窗口类");
 	}
 }
 
 // 创建主窗口
 bool App::_CreateHostWnd() {
 	if (FindWindow(_HOST_WINDOW_CLASS_NAME, nullptr)) {
-		SPDLOG_LOGGER_CRITICAL(_logger, "已存在主窗口");
+		SPDLOG_LOGGER_CRITICAL(logger, "已存在主窗口");
 		return false;
 	}
 
@@ -199,22 +224,22 @@ bool App::_CreateHostWnd() {
 		NULL
 	);
 	if (!_hwndHost) {
-		SPDLOG_LOGGER_CRITICAL(_logger, MakeWin32ErrorMsg("创建主窗口失败"));
+		SPDLOG_LOGGER_CRITICAL(logger, MakeWin32ErrorMsg("创建主窗口失败"));
 		return false;
 	}
 
-	SPDLOG_LOGGER_INFO(_logger, fmt::format("主窗口尺寸：{}x{}", _hostWndSize.cx, _hostWndSize.cy));
+	SPDLOG_LOGGER_INFO(logger, fmt::format("主窗口尺寸：{}x{}", _hostWndSize.cx, _hostWndSize.cy));
 
 	// 设置窗口不透明
 	if (!SetLayeredWindowAttributes(_hwndHost, 0, 255, LWA_ALPHA)) {
-		SPDLOG_LOGGER_ERROR(_logger, MakeWin32ErrorMsg("SetLayeredWindowAttributes 失败"));
+		SPDLOG_LOGGER_ERROR(logger, MakeWin32ErrorMsg("SetLayeredWindowAttributes 失败"));
 	}
 
 	if (!ShowWindow(_hwndHost, SW_NORMAL)) {
-		SPDLOG_LOGGER_ERROR(_logger, MakeWin32ErrorMsg("ShowWindow 失败"));
+		SPDLOG_LOGGER_ERROR(logger, MakeWin32ErrorMsg("ShowWindow 失败"));
 	}
 
-	SPDLOG_LOGGER_INFO(_logger, "已创建主窗口");
+	SPDLOG_LOGGER_INFO(logger, "已创建主窗口");
 	return true;
 }
 
@@ -225,7 +250,7 @@ LRESULT App::_HostWndProcStatic(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 
 LRESULT App::_HostWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
 	if (message == _WM_DESTORYHOST) {
-		SPDLOG_LOGGER_INFO(_logger, "收到 MAGPIE_WM_DESTORYHOST 消息，即将销毁主窗口");
+		SPDLOG_LOGGER_INFO(logger, "收到 MAGPIE_WM_DESTORYHOST 消息，即将销毁主窗口");
 		DestroyWindow(_hwndHost);
 		return 0;
 	}

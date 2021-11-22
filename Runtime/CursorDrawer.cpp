@@ -8,7 +8,7 @@
 extern std::shared_ptr<spdlog::logger> logger;
 
 
-bool CursorDrawer::Initialize(ComPtr<ID3D11Texture2D> renderTarget, const RECT& destRect) {
+bool CursorDrawer::Initialize(ComPtr<ID3D11Texture2D> renderTarget, RECT destRect) {
 	App& app = App::GetInstance();
 	if (!app.IsNoCursor()) {
 		Renderer& renderer = app.GetRenderer();
@@ -95,7 +95,7 @@ bool CursorDrawer::Initialize(ComPtr<ID3D11Texture2D> renderTarget, const RECT& 
 		_destRect = destRect;
 	}
 
-	const RECT& srcClient = app.GetSrcClientRect();
+	RECT srcClient = app.GetSrcClientRect();
 	SIZE srcSize = { srcClient.right - srcClient.left, srcClient.bottom - srcClient.top };
 
 	_clientScaleX = float(destRect.right - destRect.left) / srcSize.cx;
@@ -110,7 +110,7 @@ bool CursorDrawer::Initialize(ComPtr<ID3D11Texture2D> renderTarget, const RECT& 
 				// 注册定时器失败则仅尝试一次
 			}
 		}
-		
+
 		if (!ClipCursor(&App::GetInstance().GetSrcClientRect())) {
 			SPDLOG_LOGGER_ERROR(logger, MakeWin32ErrorMsg("ClipCursor 失败"));
 		}
@@ -133,6 +133,19 @@ bool CursorDrawer::Initialize(ComPtr<ID3D11Texture2D> renderTarget, const RECT& 
 		if (!MagShowSystemCursor(FALSE)) {
 			SPDLOG_LOGGER_ERROR(logger, MakeWin32ErrorMsg("MagShowSystemCursor 失败"));
 		}
+
+		
+	}
+
+	// 映射触控坐标
+	const RECT& hostWndRect = App::GetInstance().GetHostWndRect();
+	destRect.left += hostWndRect.left;
+	destRect.right += hostWndRect.left;
+	destRect.top += hostWndRect.top;
+	destRect.bottom += hostWndRect.top;
+
+	if (!MagSetInputTransform(TRUE, &srcClient, &destRect)) {
+		SPDLOG_LOGGER_ERROR(logger, MakeWin32ErrorMsg("MagSetInputTransform 失败"));
 	}
 
 	SPDLOG_LOGGER_INFO(logger, "CursorDrawer 初始化完成");
@@ -141,14 +154,15 @@ bool CursorDrawer::Initialize(ComPtr<ID3D11Texture2D> renderTarget, const RECT& 
 
 CursorDrawer::~CursorDrawer() {
 	if (!App::GetInstance().IsBreakpointMode()) {
+		MagShowSystemCursor(TRUE);
+		MagSetInputTransform(FALSE, nullptr, nullptr);
+
 		// CursorDrawer 析构时计时器已销毁
 		ClipCursor(nullptr);
 
 		if (App::GetInstance().IsAdjustCursorSpeed()) {
 			SystemParametersInfo(SPI_SETMOUSESPEED, 0, (PVOID)(intptr_t)_cursorSpeed, 0);
 		}
-
-		MagShowSystemCursor(TRUE);
 	}
 
 	SPDLOG_LOGGER_INFO(logger, "CursorDrawer 已析构");

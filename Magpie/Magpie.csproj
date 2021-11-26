@@ -33,7 +33,12 @@
 		<DebugType>Full</DebugType>
 	</PropertyGroup>
 
+	<PropertyGroup>
+	  <NoWarn>1701;1702;WFAC010</NoWarn>
+	</PropertyGroup>
+
 	<ItemGroup>
+		<None Remove="app.manifest" />
 		<None Remove="Resources\BuiltInScaleModels.json" />
 		<None Remove="Resources\Licenses.txt" />
 		<None Remove="Resources\Logo_Black.ico" />

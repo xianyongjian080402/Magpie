@@ -8,7 +8,7 @@
 extern std::shared_ptr<spdlog::logger> logger;
 
 
-bool CursorDrawer::Initialize(ComPtr<ID3D11Texture2D> renderTarget, RECT destRect) {
+bool CursorDrawer::Initialize(ComPtr<ID3D11Texture2D> renderTarget, const RECT& destRect) {
 	App& app = App::GetInstance();
 	if (!app.IsNoCursor()) {
 		Renderer& renderer = app.GetRenderer();
@@ -95,11 +95,25 @@ bool CursorDrawer::Initialize(ComPtr<ID3D11Texture2D> renderTarget, RECT destRec
 		_destRect = destRect;
 	}
 
-	RECT srcClient = app.GetSrcClientRect();
+	const RECT& srcClient = app.GetSrcClientRect();
 	SIZE srcSize = { srcClient.right - srcClient.left, srcClient.bottom - srcClient.top };
 
 	_clientScaleX = float(destRect.right - destRect.left) / srcSize.cx;
 	_clientScaleY = float(destRect.bottom - destRect.top) / srcSize.cy;
+
+	// 映射触控坐标
+	const RECT& hostWndRect = App::GetInstance().GetHostWndRect();
+	RECT destRect1 {
+		destRect.left + hostWndRect.left,
+		destRect.right + hostWndRect.left,
+		destRect.top + hostWndRect.top,
+		destRect.bottom + hostWndRect.top
+	};
+
+	if (!MagSetInputTransform(TRUE, (const LPRECT)&srcClient, (const LPRECT)&destRect1)) {
+		SPDLOG_LOGGER_ERROR(logger, MakeWin32ErrorMsg("MagSetInputTransform 失败"));
+		return false;
+	}
 	
 	if (!App::GetInstance().IsBreakpointMode()) {
 		// 限制光标在窗口内
@@ -133,20 +147,9 @@ bool CursorDrawer::Initialize(ComPtr<ID3D11Texture2D> renderTarget, RECT destRec
 		if (!MagShowSystemCursor(FALSE)) {
 			SPDLOG_LOGGER_ERROR(logger, MakeWin32ErrorMsg("MagShowSystemCursor 失败"));
 		}
-
-		
 	}
 
-	// 映射触控坐标
-	const RECT& hostWndRect = App::GetInstance().GetHostWndRect();
-	destRect.left += hostWndRect.left;
-	destRect.right += hostWndRect.left;
-	destRect.top += hostWndRect.top;
-	destRect.bottom += hostWndRect.top;
-
-	if (!MagSetInputTransform(TRUE, &srcClient, &destRect)) {
-		SPDLOG_LOGGER_ERROR(logger, MakeWin32ErrorMsg("MagSetInputTransform 失败"));
-	}
+	
 
 	SPDLOG_LOGGER_INFO(logger, "CursorDrawer 初始化完成");
 	return true;

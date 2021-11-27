@@ -140,6 +140,8 @@ private:
 
 	bool _DisableDirectFlip();
 
+	bool _CreateBkgWnd();
+
 	static LRESULT CALLBACK _HostWndProcStatic(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 
 	LRESULT _HostWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
@@ -154,6 +156,8 @@ private:
 
 	// 关闭 DirectFlip 时的背景全屏窗口
 	HWND _hwndDDF = NULL;
+	
+	HWND _hwndBkg = NULL;
 
 	RECT _hostWndRect{};
 	RECT _srcClientRect{};

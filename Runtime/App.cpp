@@ -14,6 +14,7 @@ const UINT WM_DESTORYHOST = RegisterWindowMessage(L"MAGPIE_WM_DESTORYHOST");
 
 static constexpr const wchar_t* HOST_WINDOW_CLASS_NAME = L"Window_Magpie_967EB565-6F73-4E94-AE53-00CC42592A22";
 static constexpr const wchar_t* DDF_WINDOW_CLASS_NAME = L"Window_Magpie_C322D752-C866-4630-91F5-32CB242A8930";
+static constexpr const wchar_t* BKG_WINDOW_CLASS_NAME = L"Window_Magpie_A36E2359-D72E-4011-91FB-828B4A96EEEA";
 static constexpr const wchar_t* HOST_WINDOW_TITLE = L"Magpie_Host";
 
 
@@ -94,12 +95,6 @@ bool App::Run(
 		return false;
 	}
 
-	if (IsDisableDirectFlip() && !IsBreakpointMode()) {
-		if (!_DisableDirectFlip()) {
-			SPDLOG_LOGGER_ERROR(logger, "_DisableDirectFlip 失败");
-		}
-	}
-
 	_renderer.reset(new Renderer());
 	if (!_renderer->Initialize()) {
 		SPDLOG_LOGGER_CRITICAL(logger, "初始化 Renderer 失败，正在清理");
@@ -162,6 +157,18 @@ bool App::Run(
 				SPDLOG_LOGGER_INFO(logger, "已禁用窗口圆角");
 				roundCornerDisabled = true;
 			}
+		}
+	}
+
+	if (!IsBreakpointMode()) {
+		if (IsDisableDirectFlip()) {
+			if (!_DisableDirectFlip()) {
+				SPDLOG_LOGGER_ERROR(logger, "_DisableDirectFlip 失败");
+			}
+		}
+
+		if (!_CreateBkgWnd()) {
+			SPDLOG_LOGGER_ERROR(logger, "_CreateBkgWnd 失败");
 		}
 	}
 
@@ -245,7 +252,7 @@ bool App::RegisterTimer(UINT uElapse, std::function<void()> cb) {
 }
 
 
-LRESULT DDFWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+LRESULT CommonWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 	if (msg == WM_DESTROY) {
 		return 0;
 	}
@@ -268,7 +275,7 @@ void App::_RegisterWndClasses() const {
 		SPDLOG_LOGGER_INFO(logger, "已注册主窗口类");
 	}
 
-	wcex.lpfnWndProc = DDFWndProc;
+	wcex.lpfnWndProc = CommonWndProc;
 	wcex.hbrBackground = (HBRUSH)GetStockObject(GRAY_BRUSH);
 	wcex.lpszClassName = DDF_WINDOW_CLASS_NAME;
 
@@ -276,6 +283,15 @@ void App::_RegisterWndClasses() const {
 		SPDLOG_LOGGER_ERROR(logger, MakeWin32ErrorMsg("注册 DDF 窗口类失败"));
 	} else {
 		SPDLOG_LOGGER_INFO(logger, "已注册 DDF 窗口类");
+	}
+
+	wcex.hbrBackground = (HBRUSH)GetStockObject(BLACK_BRUSH);
+	wcex.lpszClassName = BKG_WINDOW_CLASS_NAME;
+
+	if (!RegisterClassEx(&wcex)) {
+		SPDLOG_LOGGER_ERROR(logger, MakeWin32ErrorMsg("注册背景窗口类失败"));
+	} else {
+		SPDLOG_LOGGER_INFO(logger, "已注册背景窗口类");
 	}
 }
 
@@ -360,7 +376,40 @@ bool App::_DisableDirectFlip() {
 		SPDLOG_LOGGER_ERROR(logger, MakeWin32ErrorMsg("ShowWindow 失败"));
 	}
 
-	SPDLOG_LOGGER_INFO(logger, "已创建 DDF 主窗口");
+	SPDLOG_LOGGER_INFO(logger, "已创建 DDF 窗口");
+	return true;
+}
+
+bool App::_CreateBkgWnd() {
+	_hwndBkg = CreateWindowEx(
+		WS_EX_NOACTIVATE,
+		BKG_WINDOW_CLASS_NAME,
+		NULL,
+		WS_CLIPCHILDREN | WS_POPUP | WS_VISIBLE,
+		0,
+		0,
+		_hostWndRect.right - _hostWndRect.left,
+		_hostWndRect.bottom - _hostWndRect.top,
+		NULL,
+		NULL,
+		_hInst,
+		NULL
+	);
+
+	if (!_hwndBkg) {
+		SPDLOG_LOGGER_CRITICAL(logger, MakeWin32ErrorMsg("创建背景窗口失败"));
+		return false;
+	}
+
+	if (!SetWindowPos(_hwndBkg, _hwndSrc, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_NOREDRAW)) {
+		SPDLOG_LOGGER_ERROR(logger, MakeWin32ErrorMsg("SetWindowPos 失败"));
+	}
+
+	if (!ShowWindow(_hwndBkg, SW_NORMAL)) {
+		SPDLOG_LOGGER_ERROR(logger, MakeWin32ErrorMsg("ShowWindow 失败"));
+	}
+
+	SPDLOG_LOGGER_INFO(logger, "已创建背景窗口");
 	return true;
 }
 
@@ -412,6 +461,9 @@ void App::_ReleaseResources() {
 void App::Close() {
 	if (_hwndDDF) {
 		DestroyWindow(_hwndDDF);
+	}
+	if (_hwndBkg) {
+		DestroyWindow(_hwndBkg);
 	}
 	DestroyWindow(_hwndHost);
 }

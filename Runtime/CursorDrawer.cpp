@@ -105,8 +105,8 @@ bool CursorDrawer::Initialize(ComPtr<ID3D11Texture2D> renderTarget, const RECT& 
 	const RECT& hostWndRect = App::GetInstance().GetHostWndRect();
 	RECT destRect1 {
 		destRect.left + hostWndRect.left,
-		destRect.right + hostWndRect.left,
 		destRect.top + hostWndRect.top,
+		destRect.right + hostWndRect.left,
 		destRect.bottom + hostWndRect.top
 	};
 
@@ -148,8 +148,6 @@ bool CursorDrawer::Initialize(ComPtr<ID3D11Texture2D> renderTarget, const RECT& 
 			SPDLOG_LOGGER_ERROR(logger, MakeWin32ErrorMsg("MagShowSystemCursor 失败"));
 		}
 	}
-
-	
 
 	SPDLOG_LOGGER_INFO(logger, "CursorDrawer 初始化完成");
 	return true;

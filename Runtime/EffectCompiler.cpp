@@ -6,6 +6,7 @@
 #include <charconv>
 #include "EffectCache.h"
 #include "StrUtils.h"
+#include "App.h"
 
 
 static constexpr const char* META_INDICATOR = "//!";
@@ -13,6 +14,38 @@ static constexpr const char* META_INDICATOR = "//!";
 
 extern std::shared_ptr<spdlog::logger> logger;
 
+class PassInclude : public ID3DInclude {
+public:
+	HRESULT CALLBACK Open(
+		D3D_INCLUDE_TYPE IncludeType,
+		LPCSTR pFileName,
+		LPCVOID pParentData,
+		LPCVOID* ppData,
+		UINT* pBytes
+	) override {
+		std::wstring relativePath = L"effects\\" + StrUtils::UTF8ToUTF16(pFileName);
+
+		std::string file;
+		if (!Utils::ReadTextFile(relativePath.c_str(), file)) {
+			return E_FAIL;
+		}
+
+		char* result = new char[file.size()];
+		std::memcpy(result, file.data(), file.size());
+
+		*ppData = result;
+		*pBytes = (UINT)file.size();
+
+		return S_OK;
+	}
+
+	HRESULT CALLBACK Close(LPCVOID pData) override {
+		delete[](char*)pData;
+		return S_OK;
+	}
+};
+
+static PassInclude passInclude;
 
 UINT RemoveComments(std::string& source) {
 	// 确保以换行符结尾
@@ -289,11 +322,11 @@ UINT ResolveHeader(std::string_view block, EffectDesc& desc) {
 }
 
 UINT ResolveConstant(std::string_view block, EffectDesc& desc) {
-	// 可选的选项：VALUE，DEFAULT，LABEL，MIN，MAX
+	// 可选的选项：VALUE，DEFAULT，LABEL，MIN，MAX, DYNAMIC
 	// VALUE 与其他选项互斥
 	// 如果无 VALUE 则必须有 DEFAULT
 
-	std::bitset<5> processed;
+	std::bitset<6> processed;
 
 	std::string_view token;
 
@@ -338,7 +371,7 @@ UINT ResolveConstant(std::string_view block, EffectDesc& desc) {
 				return 1;
 			}
 		} else if (t == "DEFAULT") {
-			if (processed[0] || processed[1]) {
+			if (processed[0] || processed[1] || processed[5]) {
 				return 1;
 			}
 			processed[1] = true;
@@ -358,7 +391,7 @@ UINT ResolveConstant(std::string_view block, EffectDesc& desc) {
 			}
 			desc1.label = t;
 		} else if (t == "MIN") {
-			if (processed[0] || processed[3]) {
+			if (processed[0] || processed[3] || processed[5]) {
 				return 1;
 			}
 			processed[3] = true;
@@ -367,7 +400,7 @@ UINT ResolveConstant(std::string_view block, EffectDesc& desc) {
 				return 1;
 			}
 		} else if (t == "MAX") {
-			if (processed[0] || processed[4]) {
+			if (processed[0] || processed[4] || processed[5]) {
 				return 1;
 			}
 			processed[4] = true;
@@ -375,9 +408,30 @@ UINT ResolveConstant(std::string_view block, EffectDesc& desc) {
 			if (GetNextString(block, maxValue)) {
 				return 1;
 			}
-		} else {
+		} else if (t == "DYNAMIC") {
+			for (int i = 1; i < 6; ++i) {
+				if (processed[i]) {
+					return 1;
+				}
+			}
+			processed[5] = true;
+
+			if (GetNextToken<false>(block, token) !=2) {
+				return 1;
+			}
+		} else{
 			return 1;
 		}
+	}
+
+	// DYNAMIC 必须和 VALUE 一起出现
+	if (!processed[0] && processed[5]) {
+		return 1;
+	}
+
+	// VALUE 或 DEFAULT 必须存在
+	if (processed[0] == processed[1]) {
+		return 1;
 	}
 
 	// 代码部分
@@ -471,10 +525,6 @@ UINT ResolveConstant(std::string_view block, EffectDesc& desc) {
 		return 1;
 	}
 
-	if (processed[0] == processed[1]) {
-		return 1;
-	}
-
 	if (GetNextToken<true>(block, token)) {
 		return 1;
 	}
@@ -489,7 +539,11 @@ UINT ResolveConstant(std::string_view block, EffectDesc& desc) {
 	}
 
 	if (processed[0]) {
-		desc.valueConstants.emplace_back(std::move(desc2));
+		if (processed[5]) {
+			desc.dynamicValueConstants.emplace_back(std::move(desc2));
+		} else {
+			desc.valueConstants.emplace_back(std::move(desc2));
+		}
 	} else {
 		desc.constants.emplace_back(std::move(desc1));
 	}
@@ -643,8 +697,11 @@ UINT ResolveTexture(std::string_view block, EffectDesc& desc) {
 
 UINT ResolveSampler(std::string_view block, EffectDesc& desc) {
 	// 必选项：FILTER
+	// 可选项：ADDRESS
 
 	EffectSamplerDesc& samDesc = desc.samplers.emplace_back();
+
+	std::bitset<2> processed;
 
 	std::string_view token;
 
@@ -659,29 +716,61 @@ UINT ResolveSampler(std::string_view block, EffectDesc& desc) {
 		return 1;
 	}
 
-	if (!CheckNextToken<true>(block, META_INDICATOR)) {
-		return 1;
+	while (true) {
+		if (!CheckNextToken<true>(block, META_INDICATOR)) {
+			break;
+		}
+
+		if (GetNextToken<false>(block, token)) {
+			return 1;
+		}
+
+		std::string t = StrUtils::ToUpperCase(token);
+
+		if (t == "FILTER") {
+			if (processed[0]) {
+				return 1;
+			}
+			processed[0] = true;
+
+			if (GetNextString(block, token)) {
+				return 1;
+			}
+
+			std::string filter = StrUtils::ToUpperCase(token);
+
+			if (filter == "LINEAR") {
+				samDesc.filterType = EffectSamplerFilterType::Linear;
+			} else if (filter == "POINT") {
+				samDesc.filterType = EffectSamplerFilterType::Point;
+			} else {
+				return 1;
+			}
+		} else if (t == "ADDRESS") {
+			if (processed[1]) {
+				return 1;
+			}
+			processed[1] = true;
+
+			if (GetNextString(block, token)) {
+				return 1;
+			}
+
+			std::string filter = StrUtils::ToUpperCase(token);
+
+			if (filter == "CLAMP") {
+				samDesc.addressType = EffectSamplerAddressType::Clamp;
+			} else if (filter == "WRAP") {
+				samDesc.addressType = EffectSamplerAddressType::Wrap;
+			} else {
+				return 1;
+			}
+		} else {
+			return 1;
+		}
 	}
 
-	if (GetNextToken<false>(block, token)) {
-		return 1;
-	}
-
-	if (StrUtils::ToUpperCase(token) != "FILTER") {
-		return 1;
-	}
-
-	if (GetNextString(block, token)) {
-		return 1;
-	}
-
-	std::string filter = StrUtils::ToUpperCase(token);
-
-	if (filter == "LINEAR") {
-		samDesc.filterType = EffectSamplerFilterType::Linear;
-	} else if (filter == "POINT") {
-		samDesc.filterType = EffectSamplerFilterType::Point;
-	} else {
+	if (!processed[0]) {
 		return 1;
 	}
 
@@ -729,62 +818,6 @@ UINT ResolveCommon(std::string_view& block) {
 	return 0;
 }
 
-class PassInclude : public ID3DInclude {
-public:
-	HRESULT CALLBACK Open(
-		D3D_INCLUDE_TYPE IncludeType,
-		LPCSTR pFileName,
-		LPCVOID pParentData,
-		LPCVOID* ppData,
-		UINT* pBytes
-	) override {
-		std::wstring relativePath = L"effects\\" + StrUtils::UTF8ToUTF16(pFileName);
-
-		std::string file;
-		if (!Utils::ReadTextFile(relativePath.c_str(), file)) {
-			return E_FAIL;
-		}
-
-		char* result = new char[file.size()];
-		std::memcpy(result, file.data(), file.size());
-
-		*ppData = result;
-		*pBytes = (UINT)file.size();
-
-		return S_OK;
-	}
-
-	HRESULT CALLBACK Close(LPCVOID pData) override {
-		delete[](char*)pData;
-		return S_OK;
-	}
-};
-
-bool CompilePassPS(std::string_view hlsl, const char* entryPoint, ID3DBlob** blob, UINT passIndex) {
-	ComPtr<ID3DBlob> errorMsgs = nullptr;
-
-	UINT flags = D3DCOMPILE_ENABLE_STRICTNESS;
-	PassInclude passInclude;
-	HRESULT hr = D3DCompile(hlsl.data(), hlsl.size(), fmt::format("Pass{}", passIndex).c_str(), nullptr, &passInclude,
-		entryPoint, "ps_5_0", flags, 0, blob, &errorMsgs);
-	if (FAILED(hr)) {
-		if (errorMsgs) {
-			SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg(
-				fmt::format("编译像素着色器失败：{}", (const char*)errorMsgs->GetBufferPointer()), hr));
-		}
-		return false;
-	} else {
-		if (errorMsgs) {
-			// 显示警告消息
-			SPDLOG_LOGGER_WARN(logger,
-				"编译像素着色器时产生警告："s + (const char*)errorMsgs->GetBufferPointer());
-		}
-	}
-
-	return true;
-}
-
-
 struct TPContext {
 	ULONG index;
 	std::vector<std::string>& passSources;
@@ -794,8 +827,9 @@ struct TPContext {
 void NTAPI TPWork(PTP_CALLBACK_INSTANCE, PVOID Context, PTP_WORK) {
 	TPContext* con = (TPContext*)Context;
 	ULONG index = InterlockedIncrement(&con->index);
-
-	if (!CompilePassPS(con->passSources[index], "__M", con->passes[index].cso.ReleaseAndGetAddressOf(), index + 1)) {
+	
+	if (!App::GetInstance().GetRenderer().CompileShader(false, con->passSources[index],
+		"__M", con->passes[index].cso.ReleaseAndGetAddressOf(), fmt::format("Pass{}", index + 1).c_str(), &passInclude)) {
 		con->passes[index].cso = nullptr;
 	}
 }
@@ -966,6 +1000,16 @@ UINT ResolvePasses(const std::vector<std::string_view>& blocks, const std::vecto
 		}
 		commonHlsl.append("};");
 	}
+	if (!desc.dynamicValueConstants.empty()) {
+		// 每帧更新的常量
+		commonHlsl.append("cbuffer __D:register(b1){");
+		for (const auto& d : desc.dynamicValueConstants) {
+			commonHlsl.append(d.type == EffectConstantType::Int ? "int " : "float ")
+				.append(d.name)
+				.append(";");
+		}
+		commonHlsl.append("};");
+	}
 	if (!desc.samplers.empty()) {
 		// 采样器
 		for (int i = 0; i < desc.samplers.size(); ++i) {
@@ -1010,8 +1054,10 @@ UINT ResolvePasses(const std::vector<std::string_view>& blocks, const std::vecto
 
 	// 编译生成的 hlsl
 	assert(!passSources.empty());
+	Renderer& renderer = App::GetInstance().GetRenderer();
+
 	if (passSources.size() == 1) {
-		if (!CompilePassPS(passSources[0], "__M", desc.passes[0].cso.ReleaseAndGetAddressOf(), 1)) {
+		if (!renderer.CompileShader(false, passSources[0], "__M", desc.passes[0].cso.ReleaseAndGetAddressOf(), "Pass1", &passInclude)) {
 			SPDLOG_LOGGER_ERROR(logger, "编译 Pass1 失败");
 			return 1;
 		}
@@ -1030,7 +1076,7 @@ UINT ResolvePasses(const std::vector<std::string_view>& blocks, const std::vecto
 				SubmitThreadpoolWork(work);
 			}
 
-			CompilePassPS(passSources[0], "__M", desc.passes[0].cso.ReleaseAndGetAddressOf(), 1);
+			renderer.CompileShader(false, passSources[0], "__M", desc.passes[0].cso.ReleaseAndGetAddressOf(), "Pass1", &passInclude);
 
 			WaitForThreadpoolWorkCallbacks(work, FALSE);
 			CloseThreadpoolWork(work);
@@ -1046,7 +1092,7 @@ UINT ResolvePasses(const std::vector<std::string_view>& blocks, const std::vecto
 
 			// 回退到单线程
 			for (size_t i = 0; i < passSources.size(); ++i) {
-				if (!CompilePassPS(passSources[i], "__M", desc.passes[i].cso.ReleaseAndGetAddressOf(), (UINT)i + 1)) {
+				if (!renderer.CompileShader(false, passSources[i], "__M", desc.passes[i].cso.ReleaseAndGetAddressOf(), fmt::format("Pass{}", i + 1).c_str(), &passInclude)) {
 					SPDLOG_LOGGER_ERROR(logger, fmt::format("编译 Pass{} 失败", i + 1));
 					return 1;
 				}
@@ -1079,7 +1125,7 @@ UINT EffectCompiler::Compile(const wchar_t* fileName, EffectDesc& desc) {
 	}
 
 	std::string md5;
-	{
+	if (!App::GetInstance().IsDisableEffectCache()) {
 		std::vector<BYTE> hash;
 		if (!Utils::Hasher::GetInstance().Hash(source.data(), source.size(), hash)) {
 			SPDLOG_LOGGER_ERROR(logger, "计算 hash 失败");
@@ -1092,7 +1138,6 @@ UINT EffectCompiler::Compile(const wchar_t* fileName, EffectDesc& desc) {
 			}
 		}
 	}
-
 
 	std::string_view sourceView(source);
 

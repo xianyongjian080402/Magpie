@@ -4,7 +4,7 @@
 [![All Contributors](https://img.shields.io/github/all-contributors/Blinue/Magpie)](#%E8%B4%A1%E7%8C%AE%E8%80%85-)
 [![许可](https://img.shields.io/github/license/Blinue/Magpie)](./LICENSE)
 
-Magpie 可以将任意窗口放大至全屏，支持多种高级缩放算法，包括 Lanczos、[Anime4K](https://github.com/bloc97/Anime4K)、[FSR](https://github.com/GPUOpen-Effects/FidelityFX-FSR)、[FSRCNNX](https://github.com/igv/FSRCNN-TensorFlow)等。
+Magpie 可以将任意窗口放大至全屏，支持多种高级缩放算法，如 Lanczos、[Anime4K](https://github.com/bloc97/Anime4K)、[FSR](https://github.com/GPUOpen-Effects/FidelityFX-FSR)、[FSRCNNX](https://github.com/igv/FSRCNN-TensorFlow) 等。
 
 主要用于游戏窗口的放大显示，适用于不支持全屏模式，或者内置的全屏模式会使画面模糊的情况。
 
@@ -14,9 +14,9 @@ Magpie 可以将任意窗口放大至全屏，支持多种高级缩放算法，�
 
 👉 [FAQ](https://github.com/Blinue/Magpie/wiki/FAQ)
 
-👉 [自定义缩放配置](https://github.com/Blinue/Magpie/wiki/自定义缩放配置)
+👉 [自定义缩放配置](https://github.com/Blinue/Magpie/wiki/自定义缩放配置)（[示例](https://gist.github.com/hooke007/818ecc88f18e229bca743b7ae48947ad)）
 
-👉 [贡献指南](https://github.com/Blinue/Magpie/blob/master/CONTRIBUTING.md)
+👉 [贡献指南](./CONTRIBUTING.md)
 
 ## 使用方法
 
@@ -28,7 +28,7 @@ Magpie 可以将任意窗口放大至全屏，支持多种高级缩放算法，�
 
 #### 热键修改
 
-程序使用[globalmousekeyhook](https://github.com/gmamaladze/globalmousekeyhook)检测热键。
+程序使用 [globalmousekeyhook](https://github.com/gmamaladze/globalmousekeyhook) 检测热键。
 
 手动输入键值修改为你喜欢的键位（多个键位组合之间用 `+` 连接）
 
@@ -57,6 +57,13 @@ Magpie 可以将任意窗口放大至全屏，支持多种高级缩放算法，�
 2. GDI：使用 GDI 捕获源窗口。和 Graphics Capture 相比 CPU 占用更少。
 3. DwmSharedSurface：使用未公开的 DwmSharedSurface API 捕获窗口。
 
+## 系统需求
+
+1. Windows 10/11
+2. DirectX 功能级别 11
+3. [.NET 6 运行时](https://dotnet.microsoft.com/download)
+4. [MSVC 2005-2022 运行时](https://docs.microsoft.com/cpp/windows/latest-supported-vc-redist?view=msvc-170)
+
 ## 使用提示
 
 1. 如果你设置了 DPI 缩放，而要放大的窗口不支持（表现为画面模糊），建议首先进入该程序的兼容性设置，将“高 DPI 缩放替代”设置为“应用程序”。
@@ -75,7 +82,7 @@ Magpie 可以将任意窗口放大至全屏，支持多种高级缩放算法，�
 <table>
   <tr>
     <td align="center"><a href="https://github.com/Blinue"><img src="https://avatars.githubusercontent.com/u/34770031?v=4?s=100" width="100px;" alt=""/><br /><sub><b>刘旭</b></sub></a><br /><a href="#maintenance-Blinue" title="Maintenance">🚧</a> <a href="https://github.com/Blinue/Magpie/commits?author=Blinue" title="Code">💻</a> <a href="https://github.com/Blinue/Magpie/pulls?q=is%3Apr+reviewed-by%3ABlinue" title="Reviewed Pull Requests">👀</a> <a href="https://github.com/Blinue/Magpie/commits?author=Blinue" title="Documentation">📖</a> <a href="#question-Blinue" title="Answering Questions">💬</a></td>
-    <td align="center"><a href="https://github.com/hooke007"><img src="https://avatars.githubusercontent.com/u/41094733?v=4?s=100" width="100px;" alt=""/><br /><sub><b>hooke007</b></sub></a><br /><a href="https://github.com/Blinue/Magpie/commits?author=hooke007" title="Documentation">📖</a> <a href="#question-hooke007" title="Answering Questions">💬</a> <a href="#userTesting-hooke007" title="User Testing">📓</a></td>
+    <td align="center"><a href="https://github.com/hooke007"><img src="https://avatars.githubusercontent.com/u/41094733?v=4?s=100" width="100px;" alt=""/><br /><sub><b>hooke007</b></sub></a><br /><a href="https://github.com/Blinue/Magpie/commits?author=hooke007" title="Documentation">📖</a> <a href="#question-hooke007" title="Answering Questions">💬</a> <a href="#userTesting-hooke007" title="User Testing">📓</a> <a href="https://github.com/Blinue/Magpie/commits?author=hooke007" title="Code">💻</a></td>
     <td align="center"><a href="http://palxex.ys168.com"><img src="https://avatars.githubusercontent.com/u/58222?v=4?s=100" width="100px;" alt=""/><br /><sub><b>Pal Lockheart</b></sub></a><br /><a href="#userTesting-palxex" title="User Testing">📓</a></td>
     <td align="center"><a href="https://www.stevedonaghy.com/"><img src="https://avatars.githubusercontent.com/u/1029699?v=4?s=100" width="100px;" alt=""/><br /><sub><b>Steve Donaghy</b></sub></a><br /><a href="https://github.com/Blinue/Magpie/commits?author=neoKushan" title="Code">💻</a> <a href="#translation-neoKushan" title="Translation">🌍</a></td>
     <td align="center"><a href="http://gyrojeff.top"><img src="https://avatars.githubusercontent.com/u/30655701?v=4?s=100" width="100px;" alt=""/><br /><sub><b>gyro永不抽风</b></sub></a><br /><a href="https://github.com/Blinue/Magpie/commits?author=JeffersonQin" title="Code">💻</a></td>

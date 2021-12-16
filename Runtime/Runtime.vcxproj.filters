@@ -10,12 +10,6 @@
     <ClCompile Include="GDIFrameSource.cpp">
       <Filter>捕获</Filter>
     </ClCompile>
-    <ClCompile Include="LegacyGDIFrameSource.cpp">
-      <Filter>捕获</Filter>
-    </ClCompile>
-    <ClCompile Include="MagCallbackFrameSource.cpp">
-      <Filter>捕获</Filter>
-    </ClCompile>
     <ClCompile Include="CursorDrawer.cpp">
       <Filter>渲染</Filter>
     </ClCompile>
@@ -61,6 +55,9 @@
     <ClCompile Include="FrameSourceBase.cpp">
       <Filter>捕获</Filter>
     </ClCompile>
+    <ClCompile Include="DesktopDuplicationFrameSource.cpp">
+      <Filter>捕获</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="resource.h">
@@ -76,12 +73,6 @@
       <Filter>捕获</Filter>
     </ClInclude>
     <ClInclude Include="GDIFrameSource.h">
-      <Filter>捕获</Filter>
-    </ClInclude>
-    <ClInclude Include="LegacyGDIFrameSource.h">
-      <Filter>捕获</Filter>
-    </ClInclude>
-    <ClInclude Include="MagCallbackFrameSource.h">
       <Filter>捕获</Filter>
     </ClInclude>
     <ClInclude Include="CursorDrawer.h">
@@ -132,6 +123,9 @@
     <ClInclude Include="TextureLoader.h">
       <Filter>渲染</Filter>
     </ClInclude>
+    <ClInclude Include="DesktopDuplicationFrameSource.h">
+      <Filter>捕获</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="cpp.hint" />
@@ -141,9 +135,6 @@
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
-    <Filter Include="着色器">
-      <UniqueIdentifier>{0d12cfca-e0f7-451b-b3ce-713fb1202715}</UniqueIdentifier>
-    </Filter>
     <Filter Include="资源文件">
       <UniqueIdentifier>{f3740afe-3a7c-49d0-84ea-04d66feace50}</UniqueIdentifier>
     </Filter>
@@ -161,20 +152,6 @@
     <ResourceCompile Include="Runtime.rc">
       <Filter>资源文件</Filter>
     </ResourceCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <FxCompile Include="shaders\CopyPS.hlsl">
-      <Filter>着色器</Filter>
-    </FxCompile>
-    <FxCompile Include="shaders\FillVS.hlsl">
-      <Filter>着色器</Filter>
-    </FxCompile>
-    <FxCompile Include="shaders\SimpleVS.hlsl">
-      <Filter>着色器</Filter>
-    </FxCompile>
-    <FxCompile Include="shaders\MonochromeCursorPS.hlsl">
-      <Filter>着色器</Filter>
-    </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <Text Include="conanfile.txt" />

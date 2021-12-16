@@ -3,9 +3,6 @@
 #include "App.h"
 #include "Utils.h"
 #include "StrUtils.h"
-#include "shaders/FillVS.h"
-#include "shaders/CopyPS.h"
-#include "shaders/SimpleVS.h"
 #include <VertexTypes.h>
 #include "EffectCompiler.h"
 #include <rapidjson/document.h>
@@ -108,7 +105,15 @@ bool Renderer::GetShaderResourceView(ID3D11Texture2D* texture, ID3D11ShaderResou
 
 bool Renderer::SetFillVS() {
 	if (!_fillVS) {
-		HRESULT hr = _d3dDevice->CreateVertexShader(FillVSShaderByteCode, sizeof(FillVSShaderByteCode), nullptr, &_fillVS);
+		const char* src = "void m(uint i:SV_VERTEXID,out float4 p:SV_POSITION,out float2 c:TEXCOORD){c=float2(i&1,i>>1)*2;p=float4(c.x*2-1,-c.y*2+1,0,1);}";
+
+		ComPtr<ID3DBlob> blob;
+		if (!CompileShader(true, src, "m", &blob, "FillVS")) {
+			SPDLOG_LOGGER_ERROR(logger, "编译 FillVS 失败");
+			return false;
+		}
+
+		HRESULT hr = _d3dDevice->CreateVertexShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &_fillVS);
 		if (FAILED(hr)) {
 			SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("创建 FillVS 失败", hr));
 			return false;
@@ -125,7 +130,15 @@ bool Renderer::SetFillVS() {
 
 bool Renderer::SetCopyPS(ID3D11SamplerState* sampler, ID3D11ShaderResourceView* input) {
 	if (!_copyPS) {
-		HRESULT hr = _d3dDevice->CreatePixelShader(CopyPSShaderByteCode, sizeof(CopyPSShaderByteCode), nullptr, &_copyPS);
+		const char* src = "Texture2D t:register(t0);SamplerState s:register(s0);float4 m(float4 p:SV_POSITION,float2 c:TEXCOORD):SV_Target{return t.Sample(s,c);}";
+
+		ComPtr<ID3DBlob> blob;
+		if (!CompileShader(false, src, "m", &blob, "CopyPS")) {
+			SPDLOG_LOGGER_ERROR(logger, "编译 CopyPS 失败");
+			return false;
+		}
+
+		HRESULT hr = _d3dDevice->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &_copyPS);
 		if (FAILED(hr)) {
 			SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("创建 CopyPS 失败", hr));
 			return false;
@@ -142,7 +155,15 @@ bool Renderer::SetCopyPS(ID3D11SamplerState* sampler, ID3D11ShaderResourceView* 
 
 bool Renderer::SetSimpleVS(ID3D11Buffer* simpleVB) {
 	if (!_simpleVS) {
-		HRESULT hr = _d3dDevice->CreateVertexShader(SimpleVSShaderByteCode, sizeof(SimpleVSShaderByteCode), nullptr, &_simpleVS);
+		const char* src = "void m(float4 p:SV_POSITION,float2 c:TEXCOORD,out float4 q:SV_POSITION,out float2 d:TEXCOORD) {q=p;d=c;}";
+
+		ComPtr<ID3DBlob> blob;
+		if (!CompileShader(true, src, "m", &blob, "SimpleVS")) {
+			SPDLOG_LOGGER_ERROR(logger, "编译 SimpleVS 失败");
+			return false;
+		}
+
+		HRESULT hr = _d3dDevice->CreateVertexShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &_simpleVS);
 		if (FAILED(hr)) {
 			SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("创建 SimpleVS 失败", hr));
 			return false;
@@ -151,8 +172,8 @@ bool Renderer::SetSimpleVS(ID3D11Buffer* simpleVB) {
 		hr = _d3dDevice->CreateInputLayout(
 			VertexPositionTexture::InputElements,
 			VertexPositionTexture::InputElementCount,
-			SimpleVSShaderByteCode,
-			sizeof(SimpleVSShaderByteCode),
+			blob->GetBufferPointer(),
+			blob->GetBufferSize(),
 			&_simpleIL
 		);
 		if (FAILED(hr)) {
@@ -192,22 +213,24 @@ bool SdkLayersAvailable() noexcept {
 }
 #endif
 
-inline void LogAdapter(const DXGI_ADAPTER_DESC1& adapterDesc) {
+static inline void LogAdapter(const DXGI_ADAPTER_DESC1& adapterDesc) {
 	SPDLOG_LOGGER_INFO(logger, fmt::format("当前图形适配器：\n\tVendorId：{:#x}\n\tDeviceId：{:#x}\n\t描述：{}",
 		adapterDesc.VendorId, adapterDesc.DeviceId, StrUtils::UTF16ToUTF8(adapterDesc.Description)));
 }
 
-bool GetGraphicsAdapter(IDXGIFactory1* dxgiFactory, UINT adapterIdx, ComPtr<IDXGIAdapter1>& adapter) {
+static ComPtr<IDXGIAdapter1> ObtainGraphicsAdapter(IDXGIFactory1* dxgiFactory, UINT adapterIdx) {
+	ComPtr<IDXGIAdapter1> adapter;
+
 	HRESULT hr = dxgiFactory->EnumAdapters1(adapterIdx, adapter.ReleaseAndGetAddressOf());
 	if (SUCCEEDED(hr)) {
 		DXGI_ADAPTER_DESC1 desc;
 		HRESULT hr = adapter->GetDesc1(&desc);
 		if (FAILED(hr)) {
-			return false;
+			return nullptr;
 		}
 
 		LogAdapter(desc);
-		return true;
+		return adapter;
 	}
 
 	// 指定 GPU 失败，回落到普通方式
@@ -222,7 +245,7 @@ bool GetGraphicsAdapter(IDXGIFactory1* dxgiFactory, UINT adapterIdx, ComPtr<IDXG
 		DXGI_ADAPTER_DESC1 desc;
 		HRESULT hr = adapter->GetDesc1(&desc);
 		if (FAILED(hr)) {
-			return false;
+			return nullptr;
 		}
 
 		if (desc.Flags == DXGI_ADAPTER_FLAG_SOFTWARE) {
@@ -232,18 +255,51 @@ bool GetGraphicsAdapter(IDXGIFactory1* dxgiFactory, UINT adapterIdx, ComPtr<IDXG
 		}
 
 		LogAdapter(desc);
-		return true;
+		return adapter;
 	}
 
 	// 回落到 Basic Render Driver Adapter（WARP）
 	// https://docs.microsoft.com/en-us/windows/win32/direct3darticles/directx-warp
 	if (warpAdapter) {
 		LogAdapter(warpDesc);
-		adapter = warpAdapter;
-		return true;
+		return warpAdapter;
 	} else {
-		return false;
+		return nullptr;
 	}
+}
+
+bool Renderer::CompileShader(bool isVS, std::string_view hlsl, const char* entryPoint,
+	ID3DBlob** blob, const char* sourceName, ID3DInclude* include
+) {
+	ComPtr<ID3DBlob> errorMsgs = nullptr;
+
+	UINT flags = D3DCOMPILE_ENABLE_STRICTNESS;
+	const char* target;
+	if (isVS) {
+		target = _featureLevel >= D3D_FEATURE_LEVEL_11_0 ? "vs_5_0" :
+			(_featureLevel == D3D_FEATURE_LEVEL_10_1 ? "vs_4_1" : "vs_4_0");
+	} else {
+		target = _featureLevel >= D3D_FEATURE_LEVEL_11_0 ? "ps_5_0" :
+			(_featureLevel == D3D_FEATURE_LEVEL_10_1 ? "ps_4_1" : "ps_4_0");
+	} 
+
+	HRESULT hr = D3DCompile(hlsl.data(), hlsl.size(), sourceName, nullptr, include,
+		entryPoint, target, flags, 0, blob, &errorMsgs);
+	if (FAILED(hr)) {
+		if (errorMsgs) {
+			SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg(fmt::format("编译{}着色器失败：{}",
+				isVS ? "顶点" : "像素", (const char*)errorMsgs->GetBufferPointer()), hr));
+		}
+		return false;
+	} else {
+		if (errorMsgs) {
+			// 显示警告消息
+			SPDLOG_LOGGER_WARN(logger, fmt::format("编译{}着色器时产生警告：{}",
+				isVS ? "顶点" : "像素", (const char*)errorMsgs->GetBufferPointer()));
+		}
+	}
+
+	return true;
 }
 
 bool Renderer::_InitD3D() {
@@ -296,8 +352,8 @@ bool Renderer::_InitD3D() {
 	};
 	UINT nFeatureLevels = ARRAYSIZE(featureLevels);
 
-	ComPtr<IDXGIAdapter1> adapter;
-	if (!GetGraphicsAdapter(_dxgiFactory.Get(), App::GetInstance().GetAdapterIdx(), adapter)) {
+	_graphicsAdapter = ObtainGraphicsAdapter(_dxgiFactory.Get(), App::GetInstance().GetAdapterIdx());
+	if (!_graphicsAdapter) {
 		SPDLOG_LOGGER_ERROR(logger, "找不到可用 Adapter");
 		return false;
 	}
@@ -305,7 +361,7 @@ bool Renderer::_InitD3D() {
 	ComPtr<ID3D11Device> d3dDevice;
 	ComPtr<ID3D11DeviceContext> d3dDC;
 	hr = D3D11CreateDevice(
-		adapter.Get(),
+		_graphicsAdapter.Get(),
 		D3D_DRIVER_TYPE_UNKNOWN,
 		nullptr,
 		createDeviceFlags,
@@ -389,7 +445,7 @@ bool Renderer::_CreateSwapChain() {
 	sd.SampleDesc.Count = 1;
 	sd.SampleDesc.Quality = 0;
 	sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT | DXGI_USAGE_SHADER_INPUT;
-	sd.BufferCount = App::GetInstance().IsDisableLowLatency() ? 3 : 2;
+	sd.BufferCount = (App::GetInstance().IsDisableLowLatency() && App::GetInstance().GetFrameRate() == 0) ? 3 : 2;
 	sd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
 	sd.Flags = App::GetInstance().GetFrameRate() != 0 ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
 
@@ -490,7 +546,9 @@ void Renderer::_Render() {
 		return;
 	}
 
-	_waitingForNextFrame = !App::GetInstance().GetFrameSource().Update();
+	auto state = App::GetInstance().GetFrameSource().Update();
+	_waitingForNextFrame = state == FrameSourceBase::UpdateState::Waiting
+		|| state == FrameSourceBase::UpdateState::Error;
 	if (_waitingForNextFrame) {
 		return;
 	}
@@ -499,8 +557,35 @@ void Renderer::_Render() {
 	// 所有渲染都使用三角形带拓扑
 	_d3dDC->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
 
-	for (EffectDrawer& effect : _effects) {
-		effect.Draw();
+	// 更新常量
+	if (!EffectDrawer::UpdateExprDynamicVars()) {
+		SPDLOG_LOGGER_ERROR(logger, "UpdateExprDynamicVars 失败");
+	}
+
+	if (state == FrameSourceBase::UpdateState::NewFrame) {
+		for (EffectDrawer& effect : _effects) {
+			effect.Draw();
+		}
+	} else {
+		// 此帧内容无变化
+		// 从第一个有动态常量的 Effect 开始渲染
+		// 如果没有则只渲染最后一个 Effect 的最后一个 pass
+
+		size_t i = 0;
+		for (; i < _effects.size(); ++i) {
+			if (_effects[i].HasDynamicConstants()) {
+				break;
+			}
+		}
+
+		if (i == _effects.size()) {
+			// 只渲染最后一个 Effect 的最后一个 pass
+			_effects.back().Draw(true);
+		} else {
+			for (; i < _effects.size(); ++i) {
+				_effects[i].Draw();
+			}
+		}
 	}
 
 	if (App::GetInstance().IsShowFPS()) {
@@ -518,18 +603,27 @@ void Renderer::_Render() {
 
 bool Renderer::_CheckSrcState() {
 	HWND hwndSrc = App::GetInstance().GetHwndSrc();
-	if (GetForegroundWindow() != hwndSrc) {
-		SPDLOG_LOGGER_INFO(logger, "前台窗口已改变");
+
+	if (!App::GetInstance().IsBreakpointMode()) {
+		if (GetForegroundWindow() != hwndSrc) {
+			SPDLOG_LOGGER_INFO(logger, "前台窗口已改变");
+			return false;
+		}
+	}
+
+	if (Utils::GetWindowShowCmd(hwndSrc) != SW_NORMAL) {
+		SPDLOG_LOGGER_INFO(logger, "源窗口显示状态改变");
 		return false;
 	}
 
-	RECT rect = Utils::GetClientScreenRect(hwndSrc, App::GetInstance().IsCropTitleBarOfUWP());
-	if (App::GetInstance().GetSrcClientRect() != rect) {
-		SPDLOG_LOGGER_INFO(logger, "源窗口位置或大小改变");
+	RECT rect;
+	if (!Utils::GetClientScreenRect(App::GetInstance().GetHwndSrcClient(), rect)) {
+		SPDLOG_LOGGER_ERROR(logger, "GetClientScreenRect 失败");
 		return false;
 	}
-	if (Utils::GetWindowShowCmd(hwndSrc) != SW_NORMAL) {
-		SPDLOG_LOGGER_INFO(logger, "源窗口显示状态改变");
+
+	if (App::GetInstance().GetSrcClientRect() != rect) {
+		SPDLOG_LOGGER_INFO(logger, "源窗口位置或大小改变");
 		return false;
 	}
 
@@ -759,50 +853,51 @@ bool Renderer::SetAlphaBlend(bool enable) {
 	return true;
 }
 
-bool Renderer::GetSampler(EffectSamplerFilterType filterType, ID3D11SamplerState** result) {
+bool Renderer::GetSampler(EffectSamplerFilterType filterType, EffectSamplerAddressType addressType, ID3D11SamplerState** result) {
+	ID3D11SamplerState** sampler;
+	D3D11_TEXTURE_ADDRESS_MODE addressMode;
+	D3D11_FILTER filter;
+
 	if (filterType == EffectSamplerFilterType::Linear) {
-		if (!_linearSampler) {
-			D3D11_SAMPLER_DESC desc{};
-			desc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
-			desc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
-			desc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
-			desc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
-			desc.ComparisonFunc = D3D11_COMPARISON_NEVER;
-			desc.MinLOD = 0;
-			desc.MaxLOD = 0;
-			HRESULT hr = _d3dDevice->CreateSamplerState(&desc, &_linearSampler);
-
-			if (FAILED(hr)) {
-				SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("创建 ID3D11SamplerState 出错", hr));
-				return false;
-			} else {
-				SPDLOG_LOGGER_INFO(logger, "已创建 ID3D11SamplerState\n\tFilter：D3D11_FILTER_MIN_MAG_MIP_LINEAR");
-			}
+		filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+		if (addressType == EffectSamplerAddressType::Clamp) {
+			sampler = _linearClampSampler.GetAddressOf();
+			addressMode = D3D11_TEXTURE_ADDRESS_CLAMP;
+		} else {
+			sampler = _linearWrapSampler.GetAddressOf();
+			addressMode = D3D11_TEXTURE_ADDRESS_WRAP;
 		}
-
-		*result = _linearSampler.Get();
 	} else {
-		if (!_pointSampler) {
-			D3D11_SAMPLER_DESC desc{};
-			desc.Filter = D3D11_FILTER_MIN_MAG_MIP_POINT;
-			desc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
-			desc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
-			desc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
-			desc.ComparisonFunc = D3D11_COMPARISON_NEVER;
-			desc.MinLOD = 0;
-			desc.MaxLOD = 0;
-			HRESULT hr = _d3dDevice->CreateSamplerState(&desc, &_pointSampler);
-
-			if (FAILED(hr)) {
-				SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("创建 ID3D11SamplerState 出错", hr));
-				return false;
-			} else {
-				SPDLOG_LOGGER_INFO(logger, "已创建 ID3D11SamplerState\n\tFilter：D3D11_FILTER_MIN_MAG_MIP_POINT");
-			}
+		filter = D3D11_FILTER_MIN_MAG_MIP_POINT;
+		if (addressType == EffectSamplerAddressType::Clamp) {
+			sampler = _pointClampSampler.GetAddressOf();
+			addressMode = D3D11_TEXTURE_ADDRESS_CLAMP;
+		} else {
+			sampler = _pointWrapSampler.GetAddressOf();
+			addressMode = D3D11_TEXTURE_ADDRESS_WRAP;
 		}
-
-		*result = _pointSampler.Get();
+	}
+	
+	if (*sampler) {
+		*result = *sampler;
+		return true;
 	}
 
+	D3D11_SAMPLER_DESC desc{};
+	desc.Filter = filter;
+	desc.AddressU = addressMode;
+	desc.AddressV = addressMode;
+	desc.AddressW = addressMode;
+	desc.ComparisonFunc = D3D11_COMPARISON_NEVER;
+	desc.MinLOD = 0;
+	desc.MaxLOD = 0;
+	HRESULT hr = _d3dDevice->CreateSamplerState(&desc, sampler);
+
+	if (FAILED(hr)) {
+		SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("创建 ID3D11SamplerState 出错", hr));
+		return false;
+	}
+
+	*result = *sampler;
 	return true;
 }

@@ -106,6 +106,15 @@ namespace Magpie.Properties {
         }
         
         /// <summary>
+        ///   查找类似 This window is too large to capture. 的本地化字符串。
+        /// </summary>
+        public static string Msg_Error_Src_Too_Large {
+            get {
+                return ResourceManager.GetString("Msg_Error_Src_Too_Large", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   查找类似 This monitor does not support turning off VSync. 的本地化字符串。
         /// </summary>
         public static string Msg_Error_Vsync_Off_Not_Supported {
@@ -367,6 +376,24 @@ namespace Magpie.Properties {
         }
         
         /// <summary>
+        ///   查找类似 Disable Effect Cache 的本地化字符串。
+        /// </summary>
+        public static string UI_Options_Advanced_Disable_Effect_Cache {
+            get {
+                return ResourceManager.GetString("UI_Options_Advanced_Disable_Effect_Cache", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   查找类似 Logging 的本地化字符串。
+        /// </summary>
+        public static string UI_Options_Advanced_Logging {
+            get {
+                return ResourceManager.GetString("UI_Options_Advanced_Logging", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   查找类似 Logging Level 的本地化字符串。
         /// </summary>
         public static string UI_Options_Advanced_Logging_Level {
@@ -408,6 +435,15 @@ namespace Magpie.Properties {
         public static string UI_Options_Advanced_Logging_Level_Warn {
             get {
                 return ResourceManager.GetString("UI_Options_Advanced_Logging_Level_Warn", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   查找类似 Open Logs Folder 的本地化字符串。
+        /// </summary>
+        public static string UI_Options_Advanced_Open_Logs_Folder {
+            get {
+                return ResourceManager.GetString("UI_Options_Advanced_Open_Logs_Folder", resourceCulture);
             }
         }
         

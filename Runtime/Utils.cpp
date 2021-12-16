@@ -5,76 +5,24 @@
 #include <winternl.h>
 
 
-BOOL CALLBACK EnumChildProc(
-	_In_ HWND   hwnd,
-	_In_ LPARAM lParam
-) {
-	std::wstring className(256, 0);
-	int num = GetClassName(hwnd, &className[0], (int)className.size());
-	if (num == 0) {
-		SPDLOG_LOGGER_ERROR(logger, MakeWin32ErrorMsg("GetClassName 失败"));
-		return TRUE;
-	}
-	className.resize(num);
-
-	if (className == L"ApplicationFrameInputSinkWindow") {
-		RECT rect;
-		if (GetWindowRect(hwnd, &rect)) {
-			((std::vector<RECT>*)lParam)->push_back(rect);
-		} else {
-			SPDLOG_LOGGER_ERROR(logger, MakeWin32ErrorMsg("GetWindowRect 失败"));
-		}
-	}
-	
-	return TRUE;
-}
-
-RECT Utils::GetClientScreenRect(HWND hWnd, bool cropTitleBarOfUWP) {
-	if (cropTitleBarOfUWP) {
-		std::wstring className(256, 0);
-		int num = GetClassName(hWnd, &className[0], (int)className.size());
-		if (num > 0) {
-			className.resize(num);
-			if (className == L"ApplicationFrameWindow" || className == L"Windows.UI.Core.CoreWindow") {
-				// "Modern App"，无法使用 GetClientRect
-				std::vector<RECT> clientWindowRects;
-				// 查找所有窗口类名为 ApplicationFrameInputSinkWindow 的子窗口
-				// 该子窗口一般为客户区
-				EnumChildWindows(hWnd, EnumChildProc, (LPARAM)&clientWindowRects);
-
-				if (!clientWindowRects.empty()) {
-					// 如果有多个匹配的子窗口，取最大的（一般不会出现）
-					auto it = std::max_element(clientWindowRects.begin(), clientWindowRects.end(), [](const RECT& l, const RECT& r) {
-						return l.right - l.left + l.bottom - l.top < r.right - r.left + r.bottom - r.top;
-					});
-					return *it;
-				}
-			}
-		} else {
-			SPDLOG_LOGGER_ERROR(logger, MakeWin32ErrorMsg("GetClassName 失败"));
-		}
-	}
-
-	RECT clientRect;
-	if (!GetClientRect(hWnd, &clientRect)) {
+bool Utils::GetClientScreenRect(HWND hWnd, RECT& rect) {
+	if (!GetClientRect(hWnd, &rect)) {
 		SPDLOG_LOGGER_ERROR(logger, MakeWin32ErrorMsg("GetClientRect 出错"));
-		assert(false);
-		return {};
+		return false;
 	}
 
 	POINT p{};
 	if (!ClientToScreen(hWnd, &p)) {
 		SPDLOG_LOGGER_ERROR(logger, MakeWin32ErrorMsg("ClientToScreen 出错"));
-		assert(false);
-		return {};
+		return false;
 	}
 
-	clientRect.bottom += p.y;
-	clientRect.left += p.x;
-	clientRect.right += p.x;
-	clientRect.top += p.y;
+	rect.bottom += p.y;
+	rect.left += p.x;
+	rect.right += p.x;
+	rect.top += p.y;
 
-	return clientRect;
+	return true;
 }
 
 bool Utils::ReadFile(const wchar_t* fileName, std::vector<BYTE>& result) {
@@ -194,7 +142,7 @@ Utils::Hasher::~Hasher() {
 	if (_hashObj) {
 		HeapFree(GetProcessHeap(), 0, _hashObj);
 	}
-	if (_supportReuse && _hHash) {
+	if (_hHash) {
 		BCryptDestroyHash(_hHash);
 	}
 }
@@ -227,10 +175,9 @@ bool Utils::Hasher::Initialize() {
 	}
 
 	status = BCryptCreateHash(_hAlg, &_hHash, (PUCHAR)_hashObj, _hashObjLen, NULL, 0, BCRYPT_HASH_REUSABLE_FLAG);
-	if (NT_SUCCESS(status)) {
-		_supportReuse = true;
-	} else {
-		SPDLOG_LOGGER_WARN(logger, fmt::format("BCryptCreateHash 失败：当前设备不支持 BCRYPT_HASH_REUSABLE_FLAG\n\tNTSTATUS={}", status));
+	if (!NT_SUCCESS(status)) {
+		SPDLOG_LOGGER_ERROR(logger, fmt::format("BCryptCreateHash 失败\n\tNTSTATUS={}", status));
+		return false;
 	}
 
 	SPDLOG_LOGGER_INFO(logger, "Utils::Hasher 初始化成功");
@@ -240,17 +187,7 @@ bool Utils::Hasher::Initialize() {
 bool Utils::Hasher::Hash(void* data, size_t len, std::vector<BYTE>& result) {
 	result.resize(_hashLen);
 
-	NTSTATUS status;
-
-	if (!_supportReuse) {
-		status = BCryptCreateHash(_hAlg, &_hHash, (PUCHAR)_hashObj, _hashObjLen, NULL, 0, BCRYPT_HASH_REUSABLE_FLAG);
-		if (!NT_SUCCESS(status)) {
-			SPDLOG_LOGGER_ERROR(logger, fmt::format("BCryptCreateHash 失败\n\tNTSTATUS={}", status));
-			return false;
-		}
-	}
-
-	status = BCryptHashData(_hHash, (PUCHAR)data, (ULONG)len, 0);
+	NTSTATUS status = BCryptHashData(_hHash, (PUCHAR)data, (ULONG)len, 0);
 	if (!NT_SUCCESS(status)) {
 		SPDLOG_LOGGER_ERROR(logger, fmt::format("BCryptCreateHash 失败\n\tNTSTATUS={}", status));
 		return false;
@@ -260,10 +197,6 @@ bool Utils::Hasher::Hash(void* data, size_t len, std::vector<BYTE>& result) {
 	if (!NT_SUCCESS(status)) {
 		SPDLOG_LOGGER_ERROR(logger, fmt::format("BCryptFinishHash 失败\n\tNTSTATUS={}", status));
 		return false;
-	}
-
-	if (!_supportReuse) {
-		BCryptDestroyHash(_hHash);
 	}
 
 	return true;

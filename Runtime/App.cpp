@@ -4,8 +4,7 @@
 #include "GraphicsCaptureFrameSource.h"
 #include "GDIFrameSource.h"
 #include "DwmSharedSurfaceFrameSource.h"
-#include "LegacyGDIFrameSource.h"
-#include "MagCallbackFrameSource.h"
+#include "DesktopDuplicationFrameSource.h"
 
 
 extern std::shared_ptr<spdlog::logger> logger;
@@ -42,6 +41,63 @@ bool App::Initialize(HINSTANCE hInst) {
 	return true;
 }
 
+BOOL CALLBACK EnumChildProc(
+	_In_ HWND   hwnd,
+	_In_ LPARAM lParam
+) {
+	std::wstring className(256, 0);
+	int num = GetClassName(hwnd, &className[0], (int)className.size());
+	if (num == 0) {
+		SPDLOG_LOGGER_ERROR(logger, MakeWin32ErrorMsg("GetClassName 失败"));
+		return TRUE;
+	}
+	className.resize(num);
+
+	if (className == L"ApplicationFrameInputSinkWindow") {
+		((std::vector<HWND>*)lParam)->push_back(hwnd);
+	}
+
+	return TRUE;
+}
+
+HWND FindClientWindow(HWND hwndSrc) {
+	std::wstring className(256, 0);
+	int num = GetClassName(hwndSrc, &className[0], (int)className.size());
+	if (num > 0) {
+		className.resize(num);
+		if (className == L"ApplicationFrameWindow" || className == L"Windows.UI.Core.CoreWindow") {
+			// "Modern App"
+			std::vector<HWND> childWindows;
+			// 查找所有窗口类名为 ApplicationFrameInputSinkWindow 的子窗口
+			// 该子窗口一般为客户区
+			EnumChildWindows(hwndSrc, EnumChildProc, (LPARAM)&childWindows);
+
+			if (!childWindows.empty()) {
+				// 如果有多个匹配的子窗口，取最大的（一般不会出现）
+				int maxSize = 0, maxIdx = 0;
+				for (int i = 0; i < childWindows.size(); ++i) {
+					RECT rect;
+					if (!GetClientRect(childWindows[i], &rect)) {
+						continue;
+					}
+
+					int size = rect.right - rect.left + rect.bottom - rect.top;
+					if (size > maxSize) {
+						maxSize = size;
+						maxIdx = i;
+					}
+				}
+
+				return childWindows[maxIdx];
+			}
+		}
+	} else {
+		SPDLOG_LOGGER_ERROR(logger, MakeWin32ErrorMsg("GetClassName 失败"));
+	}
+
+	return hwndSrc;
+}
+
 bool App::Run(
 	HWND hwndSrc,
 	const std::string& effectsJson,
@@ -73,22 +129,21 @@ bool App::Run(
 		LONG_PTR style = GetWindowLongPtr(hwndSrc, GWL_STYLE);
 		if (style & WS_THICKFRAME) {
 			if (SetWindowLongPtr(hwndSrc, GWL_STYLE, style ^ WS_THICKFRAME)) {
+				// 不重绘边框，以防某些窗口状态不正确
+				// if (!SetWindowPos(hwndSrc, 0, 0, 0, 0, 0,
+				//	SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED)) {
+				//	SPDLOG_LOGGER_ERROR(logger, MakeWin32ErrorMsg("SetWindowPos 失败"));
+				// }
+
 				SPDLOG_LOGGER_INFO(logger, "已禁用窗口大小调整");
 				windowResizingDisabled = true;
 			} else {
-				SPDLOG_LOGGER_ERROR(logger, "禁用窗口大小调整失败");
+				SPDLOG_LOGGER_ERROR(logger, MakeWin32ErrorMsg("禁用窗口大小调整失败"));
 			}
 		}
 	}
 
-	_srcClientRect = Utils::GetClientScreenRect(_hwndSrc, IsCropTitleBarOfUWP());
-	if (_srcClientRect.right == 0 || _srcClientRect.bottom == 0) {
-		SPDLOG_LOGGER_CRITICAL(logger, "获取源窗口客户区失败");
-		return false;
-	}
-
-	SPDLOG_LOGGER_INFO(logger, fmt::format("源窗口客户区尺寸：{}x{}",
-		_srcClientRect.right - _srcClientRect.left, _srcClientRect.bottom - _srcClientRect.top));
+	_hwndSrcClient = IsCropTitleBarOfUWP() ? FindClientWindow(hwndSrc) : hwndSrc;
 
 	if (!_CreateHostWnd()) {
 		SPDLOG_LOGGER_CRITICAL(logger, "创建主窗口失败");
@@ -98,7 +153,7 @@ bool App::Run(
 	_renderer.reset(new Renderer());
 	if (!_renderer->Initialize()) {
 		SPDLOG_LOGGER_CRITICAL(logger, "初始化 Renderer 失败，正在清理");
-		DestroyWindow(_hwndHost);
+		Close();
 		_Run();
 		return false;
 	}
@@ -108,34 +163,39 @@ bool App::Run(
 		_frameSource.reset(new GraphicsCaptureFrameSource());
 		break;
 	case 1:
-		_frameSource.reset(new GDIFrameSource());
+		_frameSource.reset(new DesktopDuplicationFrameSource());
 		break;
 	case 2:
-		_frameSource.reset(new DwmSharedSurfaceFrameSource());
+		_frameSource.reset(new GDIFrameSource());
 		break;
 	case 3:
-		_frameSource.reset(new LegacyGDIFrameSource());
-		break;
-	case 4:
-		_frameSource.reset(new MagCallbackFrameSource());
+		_frameSource.reset(new DwmSharedSurfaceFrameSource());
 		break;
 	default:
 		SPDLOG_LOGGER_CRITICAL(logger, "未知的捕获模式，即将退出");
-		DestroyWindow(_hwndHost);
+		Close();
 		_Run();
 		return false;
 	}
 	
 	if (!_frameSource->Initialize()) {
 		SPDLOG_LOGGER_CRITICAL(logger, "初始化 FrameSource 失败，即将退出");
-		DestroyWindow(_hwndHost);
+		Close();
 		_Run();
 		return false;
 	}
 
+	// FrameSource 初始化完成后计算窗口边框，因为初始化过程中可能改变窗口位置
+	if (!Utils::GetClientScreenRect(_hwndSrcClient, _srcClientRect)) {
+		SPDLOG_LOGGER_ERROR(logger, "获取源窗口客户区失败");
+	}
+
+	SPDLOG_LOGGER_INFO(logger, fmt::format("源窗口客户区尺寸：{}x{}",
+		_srcClientRect.right - _srcClientRect.left, _srcClientRect.bottom - _srcClientRect.top));
+
 	if (!_renderer->InitializeEffectsAndCursor(effectsJson)) {
 		SPDLOG_LOGGER_CRITICAL(logger, "初始化效果失败，即将退出");
-		DestroyWindow(_hwndHost);
+		Close();
 		_Run();
 		return false;
 	}
@@ -152,7 +212,7 @@ bool App::Run(
 			INT attr = DWMWCP_DONOTROUND;
 			HRESULT hr = DwmSetWindowAttribute(hwndSrc, DWMWA_WINDOW_CORNER_PREFERENCE, &attr, sizeof(attr));
 			if (FAILED(hr)) {
-				SPDLOG_LOGGER_ERROR(logger, "禁用窗口圆角失败");
+				SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("禁用窗口圆角失败", hr));
 			} else {
 				SPDLOG_LOGGER_INFO(logger, "已禁用窗口圆角");
 				roundCornerDisabled = true;
@@ -160,6 +220,7 @@ bool App::Run(
 		}
 	}
 
+<<<<<<< HEAD
 	if (!IsBreakpointMode()) {
 		if (IsDisableDirectFlip()) {
 			if (!_DisableDirectFlip()) {
@@ -169,6 +230,11 @@ bool App::Run(
 
 		if (!_CreateBkgWnd()) {
 			SPDLOG_LOGGER_ERROR(logger, "_CreateBkgWnd 失败");
+=======
+	if (!IsBreakpointMode() && IsDisableDirectFlip()) {
+		if (!_DisableDirectFlip()) {
+			SPDLOG_LOGGER_ERROR(logger, "_DisableDirectFlip 失败");
+>>>>>>> dev
 		}
 	}
 
@@ -179,7 +245,7 @@ bool App::Run(
 		INT attr = DWMWCP_DEFAULT;
 		HRESULT hr = DwmSetWindowAttribute(hwndSrc, DWMWA_WINDOW_CORNER_PREFERENCE, &attr, sizeof(attr));
 		if (FAILED(hr)) {
-			SPDLOG_LOGGER_INFO(logger, "取消禁用窗口圆角失败");
+			SPDLOG_LOGGER_INFO(logger, MakeComErrorMsg("取消禁用窗口圆角失败", hr));
 		} else {
 			SPDLOG_LOGGER_INFO(logger, "已取消禁用窗口圆角");
 		}
@@ -190,9 +256,14 @@ bool App::Run(
 		LONG_PTR style = GetWindowLongPtr(hwndSrc, GWL_STYLE);
 		if (!(style & WS_THICKFRAME)) {
 			if (SetWindowLongPtr(hwndSrc, GWL_STYLE, style | WS_THICKFRAME)) {
+				if (!SetWindowPos(hwndSrc, 0, 0, 0, 0, 0,
+					SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED)) {
+					SPDLOG_LOGGER_ERROR(logger, MakeWin32ErrorMsg("SetWindowPos 失败"));
+				}
+
 				SPDLOG_LOGGER_INFO(logger, "已取消禁用窗口大小调整");
 			} else {
-				SPDLOG_LOGGER_ERROR(logger, "取消禁用窗口大小调整失败");
+				SPDLOG_LOGGER_ERROR(logger, MakeWin32ErrorMsg("取消禁用窗口大小调整失败"));
 			}
 		}
 	}
@@ -465,5 +536,7 @@ void App::Close() {
 	if (_hwndBkg) {
 		DestroyWindow(_hwndBkg);
 	}
-	DestroyWindow(_hwndHost);
+	if (_hwndHost) {
+		DestroyWindow(_hwndHost);
+	}
 }

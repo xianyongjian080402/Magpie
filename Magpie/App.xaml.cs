@@ -4,7 +4,7 @@ using NLog.Config;
 using System;
 using System.Diagnostics;
 using System.Globalization;
-using System.IO;
+using System.Linq;
 using System.Security.Principal;
 using System.Threading;
 using System.Windows;
@@ -18,7 +18,8 @@ namespace Magpie {
 	/// </summary>
 	public partial class App : Application {
 		public static readonly Version APP_VERSION = new("0.8.0.0");
-		public static readonly string SCALE_MODELS_JSON_PATH = Path.Combine(Directory.GetCurrentDirectory(), "ScaleModels.json");
+		public static readonly string SCALE_MODELS_JSON_PATH = ".\\ScaleModels.json";
+		public static readonly string LOGS_FOLDER = ".\\logs\\";
 
 		private static Logger Logger { get; } = LogManager.GetCurrentClassLogger();
 
@@ -53,10 +54,10 @@ namespace Magpie {
 
 		private static void InitNLog() {
 			NLog.Targets.FileTarget logfile = new("logfile") {
-				FileName = "logs/Magpie.log",
+				FileName = LOGS_FOLDER + "Magpie.log",
 				ArchiveAboveSize= 100000,
 				MaxArchiveFiles = 1,
-				ArchiveFileName = "logs/Magpie.1.log",
+				ArchiveFileName = LOGS_FOLDER + "Magpie.1.log",
 				Encoding = System.Text.Encoding.UTF8,
 				KeepFileOpen = true,
 				Layout = "${longdate}|${level:uppercase=true}|${logger}|${message}${onexception:inner=|${exception}}"
@@ -68,6 +69,8 @@ namespace Magpie {
 		}
 
 		private void Application_Startup(object sender, StartupEventArgs e) {
+			Environment.CurrentDirectory = AppDomain.CurrentDomain.BaseDirectory;
+
 			InitNLog();
 			SetLogLevel(Settings.Default.LoggingLevel);
 
@@ -115,8 +118,11 @@ namespace Magpie {
 				Logger.Info("已有实例，即将退出");
 
 				Current.Shutdown();
-				// 已存在实例时广播 WM_SHOWME，唤醒该实例
-				_ = NativeMethods.BroadcastMessage(NativeMethods.MAGPIE_WM_SHOWME);
+
+				if (!e.Args.Contains("-st")) {
+					// 已存在实例，且命令行参数不含 -st 则唤起已有实例
+					_ = NativeMethods.BroadcastMessage(NativeMethods.MAGPIE_WM_SHOWME);
+				}
 
 				mutex = null;
 				return;

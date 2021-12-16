@@ -220,7 +220,6 @@ bool App::Run(
 		}
 	}
 
-<<<<<<< HEAD
 	if (!IsBreakpointMode()) {
 		if (IsDisableDirectFlip()) {
 			if (!_DisableDirectFlip()) {
@@ -230,11 +229,6 @@ bool App::Run(
 
 		if (!_CreateBkgWnd()) {
 			SPDLOG_LOGGER_ERROR(logger, "_CreateBkgWnd 失败");
-=======
-	if (!IsBreakpointMode() && IsDisableDirectFlip()) {
-		if (!_DisableDirectFlip()) {
-			SPDLOG_LOGGER_ERROR(logger, "_DisableDirectFlip 失败");
->>>>>>> dev
 		}
 	}
 

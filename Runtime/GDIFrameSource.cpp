@@ -69,7 +69,7 @@ bool GDIFrameSource::Initialize() {
 		return false;
 	}
 
-	hr = _output.As<IDXGISurface1>(&_dxgiSurface);
+	hr = _output.As(&_dxgiSurface);
 	if (FAILED(hr)) {
 		SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("从 Texture2D 获取 IDXGISurface1 失败", hr));
 		return false;

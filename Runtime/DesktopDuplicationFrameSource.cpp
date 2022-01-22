@@ -20,7 +20,7 @@ static ComPtr<IDXGIOutput1> FindMonitor(ComPtr<IDXGIAdapter1> adapter, HMONITOR 
 
 		if (desc.Monitor == hMonitor) {
 			ComPtr<IDXGIOutput1> output1;
-			hr = output.As<IDXGIOutput1>(&output1);
+			hr = output.As(&output1);
 			if (FAILED(hr)) {
 				SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("从 IDXGIOutput 获取 IDXGIOutput1 失败", hr));
 				return nullptr;
@@ -127,14 +127,14 @@ bool DesktopDuplicationFrameSource::Initialize() {
 		return false;
 	}
 
-	hr = _sharedTex.As<IDXGIKeyedMutex>(&_sharedTexMutex);
+	hr = _sharedTex.As(&_sharedTexMutex);
 	if (FAILED(hr)) {
 		SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("检索 IDXGIKeyedMutex 失败", hr));
 		return false;
 	}
 
 	ComPtr<IDXGIResource> sharedDxgiRes;
-	hr = _sharedTex.As<IDXGIResource>(&sharedDxgiRes);
+	hr = _sharedTex.As(&sharedDxgiRes);
 	if (FAILED(hr)) {
 		return false;
 	}
@@ -274,7 +274,7 @@ bool DesktopDuplicationFrameSource::_InitializeDdpD3D(HANDLE hSharedTex) {
 		return false;
 	}
 
-	hr = _ddpSharedTex.As<IDXGIKeyedMutex>(&_ddpSharedTexMutex);
+	hr = _ddpSharedTex.As(&_ddpSharedTexMutex);
 	if (FAILED(hr)) {
 		SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("检索 IDXGIKeyedMutex 失败", hr));
 		return false;
@@ -357,7 +357,7 @@ DWORD WINAPI DesktopDuplicationFrameSource::_DDPThreadProc(LPVOID lpThreadParame
 		}
 
 		ComPtr<ID3D11Resource> d3dRes;
-		hr = dxgiRes.As<ID3D11Resource>(&d3dRes);
+		hr = dxgiRes.As(&d3dRes);
 		if (FAILED(hr)) {
 			SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("从 IDXGIResource 检索 ID3D11Resource 失败", hr));
 			continue;

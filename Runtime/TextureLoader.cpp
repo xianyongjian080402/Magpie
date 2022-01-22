@@ -44,7 +44,7 @@ ComPtr<ID3D11Texture2D> LoadImg(const wchar_t* fileName) {
 			return nullptr;
 		}
 		ComPtr<IWICPixelFormatInfo2> formatInfo;
-		hr = cInfo.As<IWICPixelFormatInfo2>(&formatInfo);
+		hr = cInfo.As(&formatInfo);
 		if (FAILED(hr)) {
 			SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("IWICComponentInfo 转换为 IWICPixelFormatInfo2 时失败", hr));
 			return nullptr;
@@ -181,7 +181,7 @@ ComPtr<ID3D11Texture2D> LoadDDS(const wchar_t* fileName) {
 	}
 
 	ComPtr<ID3D11Texture2D> tex;
-	hr = result.As<ID3D11Texture2D>(&tex);
+	hr = result.As(&tex);
 	if (FAILED(hr)) {
 		SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("从 ID3D11Resource 获取 ID3D11Texture2D 失败", hr));
 		return nullptr;

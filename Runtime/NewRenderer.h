@@ -1,5 +1,6 @@
 #pragma once
 #include "pch.h"
+#include "Utils.h"
 
 
 class NewRenderer {
@@ -7,6 +8,8 @@ public:
 	bool Initialize();
 
 private:
+    bool _CreateSwapChain();
+
     bool _LoadPipeline();
     bool _LoadAssets();
     bool _PopulateCommandList();
@@ -19,14 +22,17 @@ private:
         XMFLOAT4 color;
     };
 
+    ComPtr<IDXGIFactory4> _dxgiFactory;
+    Utils::ScopedHandle _frameLatencyWaitableObject = NULL;
+
     // Pipeline objects.
     D3D12_VIEWPORT m_viewport;
     D3D12_RECT m_scissorRect;
-    ComPtr<IDXGISwapChain3> m_swapChain;
-    ComPtr<ID3D12Device> m_device;
+    ComPtr<IDXGISwapChain3> _dxgiSwapChain;
+    ComPtr<ID3D12Device> _d3dDevice;
     ComPtr<ID3D12Resource> m_renderTargets[FrameCount];
     ComPtr<ID3D12CommandAllocator> m_commandAllocator;
-    ComPtr<ID3D12CommandQueue> m_commandQueue;
+    ComPtr<ID3D12CommandQueue> _d3dCmdQueue;
     ComPtr<ID3D12RootSignature> m_rootSignature;
     ComPtr<ID3D12DescriptorHeap> m_rtvHeap;
     ComPtr<ID3D12PipelineState> m_pipelineState;

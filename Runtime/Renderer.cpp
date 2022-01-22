@@ -324,7 +324,7 @@ bool Renderer::_InitD3D() {
 	// 检查可变帧率支持
 	BOOL supportTearing = FALSE;
 	ComPtr<IDXGIFactory5> dxgiFactory5;
-	hr = _dxgiFactory.As<IDXGIFactory5>(&dxgiFactory5);
+	hr = _dxgiFactory.As(&dxgiFactory5);
 	if (FAILED(hr)) {
 		SPDLOG_LOGGER_WARN(logger, MakeComErrorMsg("获取 IDXGIFactory5 失败", hr));
 	} else {
@@ -415,19 +415,19 @@ bool Renderer::_InitD3D() {
 	}
 	SPDLOG_LOGGER_INFO(logger, fmt::format("已创建 D3D Device\n\t功能级别：{}", fl));
 
-	hr = d3dDevice.As<ID3D11Device1>(&_d3dDevice);
+	hr = d3dDevice.As(&_d3dDevice);
 	if (FAILED(hr)) {
 		SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("获取 ID3D11Device1 失败", hr));
 		return false;
 	}
 
-	hr = d3dDC.As<ID3D11DeviceContext1>(&_d3dDC);
+	hr = d3dDC.As(&_d3dDC);
 	if (FAILED(hr)) {
 		SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("获取 ID3D11DeviceContext1 失败", hr));
 		return false;
 	}
 
-	hr = _d3dDevice.As<IDXGIDevice1>(&_dxgiDevice);
+	hr = _d3dDevice.As(&_dxgiDevice);
 	if (FAILED(hr)) {
 		SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("获取 IDXGIDevice 失败", hr));
 		return false;
@@ -465,7 +465,7 @@ bool Renderer::_CreateSwapChain() {
 		return false;
 	}
 
-	hr = dxgiSwapChain.As<IDXGISwapChain2>(&_dxgiSwapChain);
+	hr = dxgiSwapChain.As(&_dxgiSwapChain);
 	if (FAILED(hr)) {
 		SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("获取 IDXGISwapChain2 失败", hr));
 		return false;
@@ -501,7 +501,7 @@ bool Renderer::_CreateSwapChain() {
 		SPDLOG_LOGGER_WARN(logger, MakeComErrorMsg("获取 IDXGIOutput 失败", hr));
 	} else {
 		ComPtr<IDXGIOutput2> output2;
-		hr = output.As<IDXGIOutput2>(&output2);
+		hr = output.As(&output2);
 		if (FAILED(hr)) {
 			SPDLOG_LOGGER_WARN(logger, MakeComErrorMsg("获取 IDXGIOutput2 失败", hr));
 		} else {
@@ -509,7 +509,7 @@ bool Renderer::_CreateSwapChain() {
 		}
 		
 		ComPtr<IDXGIOutput6> output6;
-		hr = output.As<IDXGIOutput6>(&output6);
+		hr = output.As(&output6);
 		if (FAILED(hr)) {
 			SPDLOG_LOGGER_WARN(logger, MakeComErrorMsg("获取 IDXGIOutput6 失败", hr));
 		} else {

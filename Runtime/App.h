@@ -2,6 +2,7 @@
 #include "pch.h"
 #include "Renderer.h"
 #include "FrameSourceBase.h"
+#include "NewRenderer.h"
 
 
 class App {
@@ -22,7 +23,7 @@ public:
 		int frameRate,
 		float cursorZoomFactor,
 		UINT cursorInterpolationMode,
-		UINT adapterIdx,
+		int adapterIdx,
 		UINT multiMonitorMode,
 		const RECT& cropBorders,
 		UINT flags
@@ -53,6 +54,7 @@ public:
 	}
 
 	Renderer& GetRenderer() {
+		assert(false);
 		return *_renderer;
 	}
 
@@ -76,7 +78,7 @@ public:
 		return _cursorInterpolationMode;
 	}
 
-	UINT GetAdapterIdx() const {
+	int GetAdapterIdx() const {
 		return _adapterIdx;
 	}
 
@@ -178,7 +180,7 @@ private:
 	int _frameRate = 0;
 	float _cursorZoomFactor = 0;
 	UINT _cursorInterpolationMode = 0;
-	UINT _adapterIdx = 0;
+	int _adapterIdx = 0;
 	UINT _multiMonitorUsage = 0;
 	UINT _flags = 0;
 	RECT _cropBorders{};
@@ -204,6 +206,7 @@ private:
 	bool _roundCornerDisabled = false;
 
 	std::unique_ptr<Renderer> _renderer;
+	std::unique_ptr<NewRenderer> _newRenderer;
 	std::unique_ptr<FrameSourceBase> _frameSource;
 	ComPtr<IWICImagingFactory2> _wicImgFactory;
 

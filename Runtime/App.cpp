@@ -48,7 +48,7 @@ bool App::Run(
 	int frameRate,
 	float cursorZoomFactor,
 	UINT cursorInterpolationMode,
-	UINT adapterIdx,
+	int adapterIdx,
 	UINT multiMonitorUsage,
 	const RECT& cropBorders,
 	UINT flags
@@ -95,7 +95,7 @@ bool App::Run(
 		_OnQuit();
 		return false;
 	}
-
+	/*
 	_renderer.reset(new Renderer());
 	if (!_renderer->Initialize()) {
 		SPDLOG_LOGGER_CRITICAL(logger, "初始化 Renderer 失败，正在清理");
@@ -149,6 +149,14 @@ bool App::Run(
 		Close();
 		_Run();
 		return false;
+	}*/
+
+	_newRenderer.reset(new NewRenderer());
+	if (!_newRenderer->Initialize()) {
+		SPDLOG_LOGGER_CRITICAL(logger, "初始化 Renderer 失败，正在清理");
+		Close();
+		_Run();
+		return false;
 	}
 
 	// 禁用窗口圆角
@@ -189,7 +197,7 @@ void App::_Run() {
 			TranslateMessage(&msg);
 			DispatchMessage(&msg);
 		}
-
+		/*
 		_renderer->Render();
 
 		// 第二帧（等待时或完成后）创建 DDF 窗口
@@ -199,7 +207,7 @@ void App::_Run() {
 			if (!_DisableDirectFlip()) {
 				SPDLOG_LOGGER_ERROR(logger, "_DisableDirectFlip 失败");
 			}
-		}
+		}*/
 	}
 }
 
@@ -486,7 +494,8 @@ LRESULT App::_HostWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 void App::_OnQuit() {
 	// 释放资源
 	_frameSource = nullptr;
-	_renderer = nullptr;
+	//_renderer = nullptr;
+	_newRenderer = nullptr;
 
 	// 计时器资源在窗口销毁时自动释放
 	_nextTimerId = 1;

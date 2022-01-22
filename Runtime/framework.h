@@ -47,6 +47,9 @@
 #include <profileapi.h>
 #include <psapi.h>
 
+// DirectX 头文件
+#include <d3d12.h>
+
 // C++ 运行时头文件
 #include <string>
 #include <memory>
@@ -72,6 +75,7 @@
 
 #pragma comment(lib, "Magnification.lib")
 #pragma comment(lib, "d3d11.lib")
+#pragma comment(lib, "d3d12.lib")
 #pragma comment(lib, "windowsapp")
 #pragma comment(lib, "dwmapi.lib")
 #pragma comment(lib, "psapi.lib")

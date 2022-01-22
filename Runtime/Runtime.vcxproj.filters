@@ -61,6 +61,12 @@
     <ClCompile Include="ExclModeHack.cpp">
       <Filter>应用程序</Filter>
     </ClCompile>
+    <ClCompile Include="NewEffectDrawer.cpp">
+      <Filter>渲染</Filter>
+    </ClCompile>
+    <ClCompile Include="NewRenderer.cpp">
+      <Filter>渲染</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="resource.h">
@@ -131,6 +137,12 @@
     </ClInclude>
     <ClInclude Include="ExclModeHack.h">
       <Filter>应用程序</Filter>
+    </ClInclude>
+    <ClInclude Include="NewEffectDrawer.h">
+      <Filter>渲染</Filter>
+    </ClInclude>
+    <ClInclude Include="NewRenderer.h">
+      <Filter>渲染</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

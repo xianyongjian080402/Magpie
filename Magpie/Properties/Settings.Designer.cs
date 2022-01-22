@@ -290,9 +290,9 @@ namespace Magpie.Properties {
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
         [global::System.Configuration.DefaultSettingValueAttribute("0")]
-        public uint AdapterIdx {
+        public int AdapterIdx {
             get {
-                return ((uint)(this["AdapterIdx"]));
+                return ((int)(this["AdapterIdx"]));
             }
             set {
                 this["AdapterIdx"] = value;

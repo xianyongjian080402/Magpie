@@ -830,7 +830,10 @@ bool Renderer::_ResolveEffectsJson(const std::string& effectsJson, RECT& destRec
 			}
 		}
 
+#pragma push_macro("GetObject")
+#undef GetObject
 		for (const auto& prop : effectJson.GetObject()) {
+#pragma pop_macro("GetObject")
 			if (!prop.name.IsString()) {
 				return false;
 			}

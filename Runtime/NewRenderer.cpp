@@ -90,7 +90,7 @@ bool NewRenderer::_CreateSwapChain() {
 	sd.AlphaMode = DXGI_ALPHA_MODE_IGNORE;
 	sd.SampleDesc.Count = 1;
 	sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT | DXGI_USAGE_SHADER_INPUT;
-	sd.BufferCount = (App::GetInstance().IsDisableLowLatency() && App::GetInstance().GetFrameRate() == 0) ? 3 : 2;
+	sd.BufferCount = _GetFrameCount();
 	sd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
 	sd.Flags = App::GetInstance().GetFrameRate() != 0 ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
 
@@ -213,7 +213,7 @@ static void LogFeatureLevel(ID3D12Device* d3dDevice) {
 
 bool NewRenderer::_LoadPipeline() {
 #ifdef _DEBUG
-	// 调试模式启用 D3D 调试层
+	// 调试模式下启用 D3D 调试层
 	{
 		ComPtr<ID3D12Debug> debugController;
 		if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debugController)))) {
@@ -230,24 +230,26 @@ bool NewRenderer::_LoadPipeline() {
 	}
 
 	// 检查可变帧率支持
-	BOOL supportTearing = FALSE;
-	ComPtr<IDXGIFactory5> dxgiFactory5;
-	hr = _dxgiFactory.As(&dxgiFactory5);
-	if (FAILED(hr)) {
-		SPDLOG_LOGGER_WARN(logger, MakeComErrorMsg("获取 IDXGIFactory5 失败", hr));
-	} else {
-		hr = dxgiFactory5->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &supportTearing, sizeof(supportTearing));
+	{
+		BOOL supportTearing = FALSE;
+		ComPtr<IDXGIFactory5> dxgiFactory5;
+		hr = _dxgiFactory.As(&dxgiFactory5);
 		if (FAILED(hr)) {
-			SPDLOG_LOGGER_WARN(logger, MakeComErrorMsg("CheckFeatureSupport 失败", hr));
+			SPDLOG_LOGGER_WARN(logger, MakeComErrorMsg("获取 IDXGIFactory5 失败", hr));
+		} else {
+			hr = dxgiFactory5->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &supportTearing, sizeof(supportTearing));
+			if (FAILED(hr)) {
+				SPDLOG_LOGGER_WARN(logger, MakeComErrorMsg("CheckFeatureSupport 失败", hr));
+			}
 		}
-	}
 
-	SPDLOG_LOGGER_INFO(logger, fmt::format("可变刷新率支持：{}", supportTearing ? "是" : "否"));
+		SPDLOG_LOGGER_INFO(logger, fmt::format("可变刷新率支持：{}", supportTearing ? "是" : "否"));
 
-	if (App::GetInstance().GetFrameRate() != 0 && !supportTearing) {
-		SPDLOG_LOGGER_ERROR(logger, "当前显示器不支持可变刷新率");
-		App::GetInstance().SetErrorMsg(ErrorMessages::VSYNC_OFF_NOT_SUPPORTED);
-		return false;
+		if (App::GetInstance().GetFrameRate() != 0 && !supportTearing) {
+			SPDLOG_LOGGER_ERROR(logger, "当前显示器不支持可变刷新率");
+			App::GetInstance().SetErrorMsg(ErrorMessages::VSYNC_OFF_NOT_SUPPORTED);
+			return false;
+		}
 	}
 
 	ComPtr<IDXGIAdapter1> adapter = ObtainGraphicsAdapter(_dxgiFactory.Get(), App::GetInstance().GetAdapterIdx());
@@ -256,6 +258,7 @@ bool NewRenderer::_LoadPipeline() {
 		return false;
 	}
 
+	// 创建 D3D12 设备
 	hr = D3D12CreateDevice(adapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&_d3dDevice));
 	if (FAILED(hr)) {
 		SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("创建 D3D12 设备失败", hr));
@@ -265,18 +268,46 @@ bool NewRenderer::_LoadPipeline() {
 	LogFeatureLevel(_d3dDevice.Get());
 
 	// 创建命令队列
-	D3D12_COMMAND_QUEUE_DESC queueDesc{};
-	queueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
-	hr = _d3dDevice->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&_d3dCmdQueue));
-	if (FAILED(hr)) {
-		SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("创建命令队列失败", hr));
-		return false;
+	{
+		D3D12_COMMAND_QUEUE_DESC queueDesc{};
+		queueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
+		hr = _d3dDevice->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&_d3dCmdQueue));
+		if (FAILED(hr)) {
+			SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("创建命令队列失败", hr));
+			return false;
+		}
 	}
 
+	// 创建交换链
 	if (!_CreateSwapChain()) {
 		SPDLOG_LOGGER_ERROR(logger, "创建交换链失败");
 		return false;
 	}
+
+	// 为 RTV 创建描述符堆
+	{
+		D3D12_DESCRIPTOR_HEAP_DESC rtvHeapDesc = {};
+		rtvHeapDesc.NumDescriptors = _GetFrameCount();
+		rtvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
+		hr = _d3dDevice->CreateDescriptorHeap(&rtvHeapDesc, IID_PPV_ARGS(&_rtvHeap));
+		if (FAILED(hr)) {
+			SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("创建描述符堆失败", hr));
+			return false;
+		}
+
+		m_rtvDescriptorSize = _d3dDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+	}
+	/*
+	{
+		D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = _rtvHeap->GetCPUDescriptorHandleForHeapStart();
+		// Create a RTV for each frame.
+		for (UINT n = 0; n < FrameCount; n++) {
+			hr = _dxgiSwapChain->GetBuffer(n, IID_PPV_ARGS(&m_renderTargets[n]));
+			_d3dDevice->CreateRenderTargetView(m_renderTargets[n].Get(), nullptr, rtvHandle);
+			rtvHandle.ptr = SIZE_T((BYTE*)rtvHandle.ptr + m_rtvDescriptorSize);
+		}
+	}
+	*/
 
 	return true;
 }
@@ -291,4 +322,8 @@ bool NewRenderer::_PopulateCommandList() {
 
 bool NewRenderer::_WaitForPreviousFrame() {
 	return false;
+}
+
+int NewRenderer::_GetFrameCount() {
+	return (App::GetInstance().IsDisableLowLatency() && App::GetInstance().GetFrameRate() == 0) ? 3 : 2;
 }

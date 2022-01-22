@@ -15,7 +15,7 @@ private:
     bool _PopulateCommandList();
     bool _WaitForPreviousFrame();
 
-    static const UINT FrameCount = 2;
+    int _GetFrameCount();
 
     struct Vertex {
         XMFLOAT3 position;
@@ -30,11 +30,12 @@ private:
     D3D12_RECT m_scissorRect;
     ComPtr<IDXGISwapChain3> _dxgiSwapChain;
     ComPtr<ID3D12Device> _d3dDevice;
-    ComPtr<ID3D12Resource> m_renderTargets[FrameCount];
+    // 交换链中最多有 3 个帧缓冲区
+    ComPtr<ID3D12Resource> m_renderTargets[3];
     ComPtr<ID3D12CommandAllocator> m_commandAllocator;
     ComPtr<ID3D12CommandQueue> _d3dCmdQueue;
     ComPtr<ID3D12RootSignature> m_rootSignature;
-    ComPtr<ID3D12DescriptorHeap> m_rtvHeap;
+    ComPtr<ID3D12DescriptorHeap> _rtvHeap;
     ComPtr<ID3D12PipelineState> m_pipelineState;
     ComPtr<ID3D12GraphicsCommandList> m_commandList;
     UINT m_rtvDescriptorSize;

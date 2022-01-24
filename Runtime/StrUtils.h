@@ -63,5 +63,12 @@ struct StrUtils {
 	static void ToLowerCase(std::string& str) {
 		std::transform(str.begin(), str.end(), str.begin(), tolower);
 	}
+
+	template<typename CHAR_T>
+	static constexpr size_t StrLen(const CHAR_T* str) {
+		// std::char_traits 相比 std::strlen 支持更多字符类型
+		// 目前 MSVC 使用 __builtin_strlen，尚不清楚是否比 std::strlen 更快
+		return std::char_traits<CHAR_T>::length(str);
+	}
 };
 

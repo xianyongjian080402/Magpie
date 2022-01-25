@@ -300,7 +300,7 @@ bool NewRenderer::_LoadPipeline() {
 	
 	// 为每个帧缓冲区创建 RTV
 	{
-		D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = _rtvHeap->GetCPUDescriptorHandleForHeapStart();
+		CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(_rtvHeap->GetCPUDescriptorHandleForHeapStart());
 
 		for (UINT n = 0; n < _FRAME_COUNT; n++) {
 			hr = _dxgiSwapChain->GetBuffer(n, IID_PPV_ARGS(&_renderTargets[n]));
@@ -309,7 +309,7 @@ bool NewRenderer::_LoadPipeline() {
 				return false;
 			}
 			_d3dDevice->CreateRenderTargetView(_renderTargets[n].Get(), nullptr, rtvHandle);
-			rtvHandle.ptr = SIZE_T((BYTE*)rtvHandle.ptr + _rtvDescriptorSize);
+			rtvHandle.Offset(_rtvDescriptorSize);
 		}
 	}
 	
@@ -401,19 +401,8 @@ bool NewRenderer::_LoadAssets() {
 		psoDesc.pRootSignature = _rootSignature.Get();
 		psoDesc.VS = { (UINT8*)vertexShader->GetBufferPointer(), vertexShader->GetBufferSize() };
 		psoDesc.PS = { (UINT8*)pixelShader->GetBufferPointer(), pixelShader->GetBufferSize() };
-		psoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
-		psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_BACK;
-		psoDesc.RasterizerState.DepthClipEnable = TRUE;
-		for (D3D12_RENDER_TARGET_BLEND_DESC& renderTargetBlendDesc : psoDesc.BlendState.RenderTarget) {
-			renderTargetBlendDesc.SrcBlend = D3D12_BLEND_ONE;
-			renderTargetBlendDesc.DestBlend = D3D12_BLEND_ZERO;
-			renderTargetBlendDesc.BlendOp = D3D12_BLEND_OP_ADD;
-			renderTargetBlendDesc.SrcBlendAlpha = D3D12_BLEND_ONE;
-			renderTargetBlendDesc.DestBlendAlpha = D3D12_BLEND_ZERO;
-			renderTargetBlendDesc.BlendOpAlpha = D3D12_BLEND_OP_ADD;
-			renderTargetBlendDesc.LogicOp = D3D12_LOGIC_OP_NOOP;
-			renderTargetBlendDesc.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
-		}
+		psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
+		psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
 		psoDesc.SampleMask = UINT_MAX;
 		psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
 		psoDesc.NumRenderTargets = 1;

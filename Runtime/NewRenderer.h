@@ -5,7 +5,11 @@
 
 class NewRenderer {
 public:
+    ~NewRenderer();
+
 	bool Initialize();
+
+    void Render();
 
 private:
     bool _CreateSwapChain();
@@ -26,13 +30,13 @@ private:
     Utils::ScopedHandle _frameLatencyWaitableObject = NULL;
 
     // Pipeline objects.
-    D3D12_VIEWPORT m_viewport;
-    D3D12_RECT m_scissorRect;
+    CD3DX12_VIEWPORT m_viewport;
+    CD3DX12_RECT m_scissorRect;
     ComPtr<IDXGISwapChain3> _dxgiSwapChain;
     ComPtr<ID3D12Device> _d3dDevice;
     std::array<ComPtr<ID3D12Resource>, _FRAME_COUNT> _renderTargets;
     ComPtr<ID3D12CommandAllocator> _cmdAllocator;
-    ComPtr<ID3D12CommandQueue> _d3dCmdQueue;
+    ComPtr<ID3D12CommandQueue> _cmdQueue;
     ComPtr<ID3D12RootSignature> _rootSignature;
     ComPtr<ID3D12DescriptorHeap> _rtvHeap;
     ComPtr<ID3D12PipelineState> m_pipelineState;
@@ -45,7 +49,7 @@ private:
 
     // Synchronization objects.
     UINT m_frameIndex;
-    HANDLE m_fenceEvent;
+    Utils::ScopedHandle m_fenceEvent;
     ComPtr<ID3D12Fence> m_fence;
     UINT64 m_fenceValue;
 };

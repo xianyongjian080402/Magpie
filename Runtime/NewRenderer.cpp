@@ -7,6 +7,16 @@
 extern std::shared_ptr<spdlog::logger> logger;
 
 bool NewRenderer::Initialize() {
+	const RECT& hostWndRect = App::GetInstance().GetHostWndRect();
+	SIZE hostSize = { hostWndRect.right - hostWndRect.left, hostWndRect.bottom - hostWndRect.top };
+
+	m_viewport = CD3DX12_VIEWPORT(
+		0.0f, 0.0f,
+		static_cast<float>(hostSize.cx),
+		static_cast<float>(hostSize.cy)
+	);
+	m_scissorRect = CD3DX12_RECT(0, 0, hostSize.cx, hostSize.cy);
+
 	if (!_LoadPipeline()) {
 		return false;
 	}
@@ -16,6 +26,20 @@ bool NewRenderer::Initialize() {
 	}
 
 	return true;
+}
+
+void NewRenderer::Render() {
+	_PopulateCommandList();
+
+	ID3D12CommandList* ppCommandLists[] = { m_commandList.Get() };
+	_cmdQueue->ExecuteCommandLists((UINT)std::size(ppCommandLists), ppCommandLists);
+
+	_dxgiSwapChain->Present(1, 0);
+	_WaitForPreviousFrame();
+}
+
+NewRenderer::~NewRenderer() {
+	_WaitForPreviousFrame();
 }
 
 static inline void LogAdapter(const DXGI_ADAPTER_DESC1& adapterDesc) {
@@ -96,7 +120,7 @@ bool NewRenderer::_CreateSwapChain() {
 
 	ComPtr<IDXGISwapChain1> dxgiSwapChain = nullptr;
 	HRESULT hr = _dxgiFactory->CreateSwapChainForHwnd(
-		_d3dCmdQueue.Get(),
+		_cmdQueue.Get(),
 		App::GetInstance().GetHwndHost(),
 		&sd,
 		nullptr,
@@ -271,7 +295,7 @@ bool NewRenderer::_LoadPipeline() {
 	{
 		D3D12_COMMAND_QUEUE_DESC queueDesc{};
 		queueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
-		hr = _d3dDevice->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&_d3dCmdQueue));
+		hr = _d3dDevice->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&_cmdQueue));
 		if (FAILED(hr)) {
 			SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("创建命令队列失败", hr));
 			return false;
@@ -391,7 +415,7 @@ bool NewRenderer::_LoadAssets() {
 
 		// 顶点输入布局
 		D3D12_INPUT_ELEMENT_DESC inputElementDescs[] = {
-			{"POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+			{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
 			{"COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0}
 		};
 
@@ -441,18 +465,105 @@ bool NewRenderer::_LoadAssets() {
 
 		constexpr UINT vertexBufferSize = sizeof(triangleVertices);
 
-		//D3D12_HEAP_PROPERTIES desc;
-		//_d3dDevice->CreateCommittedResource()
+		CD3DX12_HEAP_PROPERTIES heapProps(D3D12_HEAP_TYPE_UPLOAD);
+		auto desc = CD3DX12_RESOURCE_DESC::Buffer(vertexBufferSize);
+		hr = _d3dDevice->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&m_vertexBuffer));
+		if (FAILED(hr)) {
+			SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("创建顶点缓冲区失败", hr));
+			return false;
+		}
+
+		UINT8* pVertexDataBegin = nullptr;
+		CD3DX12_RANGE readRange(0, 0);
+		hr = m_vertexBuffer->Map(0, &readRange, (void**)(&pVertexDataBegin));
+		if (FAILED(hr)) {
+			SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("Map 失败", hr));
+			return false;
+		}
+
+		std::memcpy(pVertexDataBegin, triangleVertices, vertexBufferSize);
+
+		m_vertexBuffer->Unmap(0, nullptr);
+
+		// 初始化顶点缓冲区视图
+		m_vertexBufferView.BufferLocation = m_vertexBuffer->GetGPUVirtualAddress();
+		m_vertexBufferView.StrideInBytes = sizeof(Vertex);
+		m_vertexBufferView.SizeInBytes = vertexBufferSize;
 	}
 
-	return false;
+	// 创建同步对象
+	{
+		hr = _d3dDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_fence));
+		if (FAILED(hr)) {
+			SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("CreateFence 失败", hr));
+			return false;
+		}
+
+		m_fenceValue = 1;
+
+		m_fenceEvent.reset(CreateEvent(nullptr, FALSE, FALSE, nullptr));
+		if (!m_fenceEvent) {
+			SPDLOG_LOGGER_ERROR(logger, MakeWin32ErrorMsg("CreateEvent 失败"));
+			return false;
+		}
+
+		_WaitForPreviousFrame();
+	}
+
+	return true;
 }
 
 bool NewRenderer::_PopulateCommandList() {
-	return false;
+	_cmdAllocator->Reset();
+
+	m_commandList->Reset(_cmdAllocator.Get(), m_pipelineState.Get());
+
+	// Set necessary state.
+	m_commandList->SetGraphicsRootSignature(_rootSignature.Get());
+	m_commandList->RSSetViewports(1, &m_viewport);
+	m_commandList->RSSetScissorRects(1, &m_scissorRect);
+
+	// Indicate that the back buffer will be used as a render target.
+	auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(_renderTargets[m_frameIndex].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+	m_commandList->ResourceBarrier(1, &barrier);
+
+	CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(_rtvHeap->GetCPUDescriptorHandleForHeapStart(), m_frameIndex, _rtvDescriptorSize);
+	m_commandList->OMSetRenderTargets(1, &rtvHandle, FALSE, nullptr);
+
+	// Record commands.
+	const float clearColor[] = { 0.0f, 0.0f, 0.0f, 1.0f };
+	m_commandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
+	m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	m_commandList->IASetVertexBuffers(0, 1, &m_vertexBufferView);
+	m_commandList->DrawInstanced(3, 1, 0, 0);
+
+	// Indicate that the back buffer will now be used to present.
+	barrier = CD3DX12_RESOURCE_BARRIER::Transition(_renderTargets[m_frameIndex].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
+	m_commandList->ResourceBarrier(1, &barrier);
+
+	m_commandList->Close();
+	return true;
 }
 
 bool NewRenderer::_WaitForPreviousFrame() {
-	return false;
+	// Signal and increment the fence value.
+	const UINT64 fence = m_fenceValue;
+	HRESULT hr = _cmdQueue->Signal(m_fence.Get(), fence);
+	if (FAILED(hr)) {
+		return false;
+	}
+	m_fenceValue++;
+
+	// Wait until the previous frame is finished.
+	if (m_fence->GetCompletedValue() < fence) {
+		hr = m_fence->SetEventOnCompletion(fence, m_fenceEvent.get());
+		if (FAILED(hr)) {
+			return false;
+		}
+		WaitForSingleObject(m_fenceEvent.get(), INFINITE);
+	}
+
+	m_frameIndex = _dxgiSwapChain->GetCurrentBackBufferIndex();
+	return true;
 }
 

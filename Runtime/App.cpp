@@ -160,7 +160,7 @@ bool App::Run(
 	}
 
 	// 禁用窗口圆角
-	if (_frameSource->HasRoundCornerInWin11()) {
+	/*if (_frameSource->HasRoundCornerInWin11()) {
 		const auto& version = Utils::GetOSVersion();
 		bool isWin11 = Utils::CompareVersion(
 			version.dwMajorVersion, version.dwMinorVersion,
@@ -176,7 +176,7 @@ bool App::Run(
 				_roundCornerDisabled = true;
 			}
 		}
-	}
+	}*/
 
 	_Run();
 
@@ -197,9 +197,9 @@ void App::_Run() {
 			TranslateMessage(&msg);
 			DispatchMessage(&msg);
 		}
+		
+		_newRenderer->Render();
 		/*
-		_renderer->Render();
-
 		// 第二帧（等待时或完成后）创建 DDF 窗口
 		// 如果在 Run 中创建会有短暂的灰屏
 		// 选择第二帧的原因：当 GetFrameCount() 返回 1 时第一帧可能处于等待状态而没有渲染，见 Renderer::Render()

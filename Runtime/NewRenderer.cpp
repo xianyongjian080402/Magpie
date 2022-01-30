@@ -105,7 +105,31 @@ static ComPtr<IDXGIAdapter1> ObtainGraphicsAdapter(IDXGIFactory4* dxgiFactory, i
 }
 
 bool NewRenderer::_CreateSwapChain() {
+	HRESULT hr;
 	const RECT& hostWndRect = App::GetInstance().GetHostWndRect();
+
+	// 检查可变帧率支持
+	BOOL allowTearing = FALSE;
+	{
+		ComPtr<IDXGIFactory5> dxgiFactory5;
+		hr = _dxgiFactory.As(&dxgiFactory5);
+		if (FAILED(hr)) {
+			SPDLOG_LOGGER_WARN(logger, MakeComErrorMsg("获取 IDXGIFactory5 失败", hr));
+		} else {
+			hr = dxgiFactory5->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &allowTearing, sizeof(allowTearing));
+			if (FAILED(hr)) {
+				SPDLOG_LOGGER_WARN(logger, MakeComErrorMsg("CheckFeatureSupport 失败", hr));
+			}
+		}
+
+		SPDLOG_LOGGER_INFO(logger, fmt::format("可变刷新率支持：{}", allowTearing ? "是" : "否"));
+
+		if (App::GetInstance().GetFrameRate() != 0 && !allowTearing) {
+			SPDLOG_LOGGER_ERROR(logger, "当前显示器不支持可变刷新率");
+			App::GetInstance().SetErrorMsg(ErrorMessages::VSYNC_OFF_NOT_SUPPORTED);
+			return false;
+		}
+	}
 
 	DXGI_SWAP_CHAIN_DESC1 sd = {};
 	sd.Width = hostWndRect.right - hostWndRect.left;
@@ -115,11 +139,16 @@ bool NewRenderer::_CreateSwapChain() {
 	sd.SampleDesc.Count = 1;
 	sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT | DXGI_USAGE_SHADER_INPUT;
 	sd.BufferCount = _FRAME_COUNT;
-	sd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
-	sd.Flags = App::GetInstance().GetFrameRate() != 0 ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
+	// 使用 DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL 而不是 DXGI_SWAP_EFFECT_FLIP_DISCARD
+	// 不渲染四周（可能存在的）黑边，因此必须保证交换链缓冲区不被改变
+	// 否则将不得不在每帧渲染前清空后缓冲区，这个操作在一些显卡上比较耗时
+	sd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
+	// 只要显卡支持始终启用 DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING
+	sd.Flags = (allowTearing ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0)
+		| (App::GetInstance().GetFrameRate() == 0 ? DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT : 0);
 
 	ComPtr<IDXGISwapChain1> dxgiSwapChain = nullptr;
-	HRESULT hr = _dxgiFactory->CreateSwapChainForHwnd(
+	hr = _dxgiFactory->CreateSwapChainForHwnd(
 		_cmdQueue.Get(),
 		App::GetInstance().GetHwndHost(),
 		&sd,
@@ -245,35 +274,17 @@ bool NewRenderer::_LoadPipeline() {
 			SPDLOG_LOGGER_INFO(logger, "已启用 D3D12 调试层");
 		}
 	}
+
+	// 启用 DXGI 调试可以捕获到枚举图形适配器和创建 D3D 设备时发生的错误
+	UINT dxgiFlag = DXGI_CREATE_FACTORY_DEBUG;
+#else
+	UINT dxgiFlag = 0;
 #endif // _DEBUG
 
-	HRESULT hr = CreateDXGIFactory1(IID_PPV_ARGS(&_dxgiFactory));
+	HRESULT hr = CreateDXGIFactory2(dxgiFlag, IID_PPV_ARGS(&_dxgiFactory));
 	if (FAILED(hr)) {
 		SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("CreateDXGIFactory1 失败", hr));
 		return false;
-	}
-
-	// 检查可变帧率支持
-	{
-		BOOL supportTearing = FALSE;
-		ComPtr<IDXGIFactory5> dxgiFactory5;
-		hr = _dxgiFactory.As(&dxgiFactory5);
-		if (FAILED(hr)) {
-			SPDLOG_LOGGER_WARN(logger, MakeComErrorMsg("获取 IDXGIFactory5 失败", hr));
-		} else {
-			hr = dxgiFactory5->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &supportTearing, sizeof(supportTearing));
-			if (FAILED(hr)) {
-				SPDLOG_LOGGER_WARN(logger, MakeComErrorMsg("CheckFeatureSupport 失败", hr));
-			}
-		}
-
-		SPDLOG_LOGGER_INFO(logger, fmt::format("可变刷新率支持：{}", supportTearing ? "是" : "否"));
-
-		if (App::GetInstance().GetFrameRate() != 0 && !supportTearing) {
-			SPDLOG_LOGGER_ERROR(logger, "当前显示器不支持可变刷新率");
-			App::GetInstance().SetErrorMsg(ErrorMessages::VSYNC_OFF_NOT_SUPPORTED);
-			return false;
-		}
 	}
 
 	ComPtr<IDXGIAdapter1> adapter = ObtainGraphicsAdapter(_dxgiFactory.Get(), App::GetInstance().GetAdapterIdx());
@@ -290,6 +301,21 @@ bool NewRenderer::_LoadPipeline() {
 	}
 
 	LogFeatureLevel(_d3dDevice.Get());
+
+#ifdef _DEBUG
+	/*
+	// 调试层报告错误时中断程序
+	{
+		ComPtr<ID3D12InfoQueue> d3dInfoQueue;
+		hr = _d3dDevice.As(&d3dInfoQueue);
+		if (SUCCEEDED(hr)) {
+			d3dInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, TRUE);
+			d3dInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, TRUE);
+		} else {
+			SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("获取 ID3D12InfoQueue 失败", hr));
+		}
+	}*/
+#endif
 
 	// 创建命令队列
 	{

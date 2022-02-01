@@ -31,7 +31,7 @@ bool NewRenderer::Initialize() {
 void NewRenderer::Render() {
 	_PopulateCommandList();
 
-	ID3D12CommandList* ppCommandLists[] = { m_commandList.Get() };
+	ID3D12CommandList* ppCommandLists[] = { m_commandList.get() };
 	_cmdQueue->ExecuteCommandLists((UINT)std::size(ppCommandLists), ppCommandLists);
 
 	_dxgiSwapChain->Present(1, 0);
@@ -47,17 +47,17 @@ static inline void LogAdapter(const DXGI_ADAPTER_DESC1& adapterDesc) {
 		adapterDesc.VendorId, adapterDesc.DeviceId, StrUtils::UTF16ToUTF8(adapterDesc.Description)));
 }
 
-static ComPtr<IDXGIAdapter1> ObtainGraphicsAdapter(IDXGIFactory4* dxgiFactory, int adapterIdx) {
-	ComPtr<IDXGIAdapter1> adapter;
+static winrt::com_ptr<IDXGIAdapter1> ObtainGraphicsAdapter(winrt::com_ptr<IDXGIFactory4> dxgiFactory, int adapterIdx) {
+	winrt::com_ptr<IDXGIAdapter1> adapter;
 	
 	if (adapterIdx >= 0) {
-		HRESULT hr = dxgiFactory->EnumAdapters1(adapterIdx, adapter.ReleaseAndGetAddressOf());
+		HRESULT hr = dxgiFactory->EnumAdapters1(adapterIdx, adapter.put());
 		if (SUCCEEDED(hr)) {
 			DXGI_ADAPTER_DESC1 desc;
 			HRESULT hr = adapter->GetDesc1(&desc);
 			if (SUCCEEDED(hr)) {
 				// 测试此适配器是否支持 D3D12
-				hr = D3D12CreateDevice(adapter.Get(), D3D_FEATURE_LEVEL_11_0, _uuidof(ID3D12Device), nullptr);
+				hr = D3D12CreateDevice(adapter.get(), D3D_FEATURE_LEVEL_11_0, _uuidof(ID3D12Device), nullptr);
 				if (SUCCEEDED(hr)) {
 					LogAdapter(desc);
 					return adapter;
@@ -70,7 +70,7 @@ static ComPtr<IDXGIAdapter1> ObtainGraphicsAdapter(IDXGIFactory4* dxgiFactory, i
 
 	for (UINT adapterIndex = 0;
 			SUCCEEDED(dxgiFactory->EnumAdapters1(adapterIndex,
-				adapter.ReleaseAndGetAddressOf()));
+				adapter.put()));
 			adapterIndex++
 	) {
 		DXGI_ADAPTER_DESC1 desc;
@@ -84,7 +84,7 @@ static ComPtr<IDXGIAdapter1> ObtainGraphicsAdapter(IDXGIFactory4* dxgiFactory, i
 		}
 		
 		// 测试此适配器是否支持 D3D12
-		hr = D3D12CreateDevice(adapter.Get(), D3D_FEATURE_LEVEL_11_0, _uuidof(ID3D12Device), nullptr);
+		hr = D3D12CreateDevice(adapter.get(), D3D_FEATURE_LEVEL_11_0, _uuidof(ID3D12Device), nullptr);
 		if (SUCCEEDED(hr)) {
 			LogAdapter(desc);
 			return adapter;
@@ -95,7 +95,7 @@ static ComPtr<IDXGIAdapter1> ObtainGraphicsAdapter(IDXGIFactory4* dxgiFactory, i
 
 	// 回落到 Basic Render Driver Adapter（WARP）
 	// https://docs.microsoft.com/en-us/windows/win32/direct3darticles/directx-warp
-	HRESULT hr = dxgiFactory->EnumWarpAdapter(IID_PPV_ARGS(&adapter));
+	HRESULT hr = dxgiFactory->EnumWarpAdapter(IID_PPV_ARGS(adapter.put()));
 	if (FAILED(hr)) {
 		SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("创建 WARP 设备失败", hr));
 		return nullptr;
@@ -105,15 +105,14 @@ static ComPtr<IDXGIAdapter1> ObtainGraphicsAdapter(IDXGIFactory4* dxgiFactory, i
 }
 
 bool NewRenderer::_CreateSwapChain() {
-	HRESULT hr;
+	HRESULT hr{};
 	const RECT& hostWndRect = App::GetInstance().GetHostWndRect();
 
 	// 检查可变帧率支持
 	BOOL allowTearing = FALSE;
 	{
-		ComPtr<IDXGIFactory5> dxgiFactory5;
-		hr = _dxgiFactory.As(&dxgiFactory5);
-		if (FAILED(hr)) {
+		winrt::com_ptr<IDXGIFactory5> dxgiFactory5 = _dxgiFactory.try_as<IDXGIFactory5>();
+		if (!dxgiFactory5) {
 			SPDLOG_LOGGER_WARN(logger, MakeComErrorMsg("获取 IDXGIFactory5 失败", hr));
 		} else {
 			hr = dxgiFactory5->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &allowTearing, sizeof(allowTearing));
@@ -147,22 +146,21 @@ bool NewRenderer::_CreateSwapChain() {
 	sd.Flags = (allowTearing ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0)
 		| (App::GetInstance().GetFrameRate() == 0 ? DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT : 0);
 
-	ComPtr<IDXGISwapChain1> dxgiSwapChain = nullptr;
+	winrt::com_ptr<IDXGISwapChain1> dxgiSwapChain = nullptr;
 	hr = _dxgiFactory->CreateSwapChainForHwnd(
-		_cmdQueue.Get(),
+		_cmdQueue.get(),
 		App::GetInstance().GetHwndHost(),
 		&sd,
 		nullptr,
 		nullptr,
-		&dxgiSwapChain
+		dxgiSwapChain.put()
 	);
 	if (FAILED(hr)) {
 		SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("创建交换链失败", hr));
 		return false;
 	}
 
-	hr = dxgiSwapChain.As(&_dxgiSwapChain);
-	if (FAILED(hr)) {
+	if (!dxgiSwapChain.try_as(_dxgiSwapChain)) {
 		SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("获取 IDXGISwapChain2 失败", hr));
 		return false;
 	}
@@ -186,22 +184,20 @@ bool NewRenderer::_CreateSwapChain() {
 	// 检查 Multiplane Overlay 和 Hardware Composition 支持
 	BOOL supportMPO = FALSE;
 	BOOL supportHardwareComposition = FALSE;
-	ComPtr<IDXGIOutput> output;
-	hr = _dxgiSwapChain->GetContainingOutput(&output);
+	winrt::com_ptr<IDXGIOutput> output;
+	hr = _dxgiSwapChain->GetContainingOutput(output.put());
 	if (FAILED(hr)) {
 		SPDLOG_LOGGER_WARN(logger, MakeComErrorMsg("获取 IDXGIOutput 失败", hr));
 	} else {
-		ComPtr<IDXGIOutput2> output2;
-		hr = output.As(&output2);
-		if (FAILED(hr)) {
+		winrt::com_ptr<IDXGIOutput2> output2 = output.try_as<IDXGIOutput2>();
+		if (!output2) {
 			SPDLOG_LOGGER_WARN(logger, MakeComErrorMsg("获取 IDXGIOutput2 失败", hr));
 		} else {
 			supportMPO = output2->SupportsOverlays();
 		}
 
-		ComPtr<IDXGIOutput6> output6;
-		hr = output.As(&output6);
-		if (FAILED(hr)) {
+		winrt::com_ptr<IDXGIOutput6> output6 = output.try_as<IDXGIOutput6>();
+		if (!output6) {
 			SPDLOG_LOGGER_WARN(logger, MakeComErrorMsg("获取 IDXGIOutput6 失败", hr));
 		} else {
 			UINT flags;
@@ -220,7 +216,7 @@ bool NewRenderer::_CreateSwapChain() {
 	return true;
 }
 
-static void LogFeatureLevel(ID3D12Device* d3dDevice) {
+static void LogFeatureLevel(winrt::com_ptr<ID3D12Device> d3dDevice) {
 	D3D_FEATURE_LEVEL requestedLevels[] = {
 		D3D_FEATURE_LEVEL_12_2,
 		D3D_FEATURE_LEVEL_12_1,
@@ -268,8 +264,8 @@ bool NewRenderer::_LoadPipeline() {
 #ifdef _DEBUG
 	// 调试模式下启用 D3D 调试层
 	{
-		ComPtr<ID3D12Debug> debugController;
-		if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debugController)))) {
+		winrt::com_ptr<ID3D12Debug> debugController;
+		if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(debugController.put())))) {
 			debugController->EnableDebugLayer();
 			SPDLOG_LOGGER_INFO(logger, "已启用 D3D12 调试层");
 		}
@@ -281,34 +277,33 @@ bool NewRenderer::_LoadPipeline() {
 	UINT dxgiFlag = 0;
 #endif // _DEBUG
 
-	HRESULT hr = CreateDXGIFactory2(dxgiFlag, IID_PPV_ARGS(&_dxgiFactory));
+	HRESULT hr = CreateDXGIFactory2(dxgiFlag, IID_PPV_ARGS(_dxgiFactory.put()));
 	if (FAILED(hr)) {
 		SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("CreateDXGIFactory1 失败", hr));
 		return false;
 	}
 
-	ComPtr<IDXGIAdapter1> adapter = ObtainGraphicsAdapter(_dxgiFactory.Get(), App::GetInstance().GetAdapterIdx());
+	winrt::com_ptr<IDXGIAdapter1> adapter = ObtainGraphicsAdapter(_dxgiFactory, App::GetInstance().GetAdapterIdx());
 	if (!adapter) {
 		SPDLOG_LOGGER_ERROR(logger, "没有可用的图形适配器");
 		return false;
 	}
 
 	// 创建 D3D12 设备
-	hr = D3D12CreateDevice(adapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&_d3dDevice));
+	hr = D3D12CreateDevice(adapter.get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(_d3dDevice.put()));
 	if (FAILED(hr)) {
 		SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("创建 D3D12 设备失败", hr));
 		return false;
 	}
 
-	LogFeatureLevel(_d3dDevice.Get());
+	LogFeatureLevel(_d3dDevice);
 
 #ifdef _DEBUG
 	/*
 	// 调试层报告错误时中断程序
 	{
-		ComPtr<ID3D12InfoQueue> d3dInfoQueue;
-		hr = _d3dDevice.As(&d3dInfoQueue);
-		if (SUCCEEDED(hr)) {
+		winrt::com_ptr<ID3D12InfoQueue> d3dInfoQueue = _d3dDevice.try_as<ID3D12InfoQueue>();
+		if (d3dInfoQueue) {
 			d3dInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, TRUE);
 			d3dInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, TRUE);
 		} else {
@@ -321,7 +316,7 @@ bool NewRenderer::_LoadPipeline() {
 	{
 		D3D12_COMMAND_QUEUE_DESC queueDesc{};
 		queueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
-		hr = _d3dDevice->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&_cmdQueue));
+		hr = _d3dDevice->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(_cmdQueue.put()));
 		if (FAILED(hr)) {
 			SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("创建命令队列失败", hr));
 			return false;
@@ -339,7 +334,7 @@ bool NewRenderer::_LoadPipeline() {
 		D3D12_DESCRIPTOR_HEAP_DESC rtvHeapDesc = {};
 		rtvHeapDesc.NumDescriptors = _FRAME_COUNT;
 		rtvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
-		hr = _d3dDevice->CreateDescriptorHeap(&rtvHeapDesc, IID_PPV_ARGS(&_rtvHeap));
+		hr = _d3dDevice->CreateDescriptorHeap(&rtvHeapDesc, IID_PPV_ARGS(_rtvHeap.put()));
 		if (FAILED(hr)) {
 			SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("创建描述符堆失败", hr));
 			return false;
@@ -353,18 +348,18 @@ bool NewRenderer::_LoadPipeline() {
 		CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(_rtvHeap->GetCPUDescriptorHandleForHeapStart());
 
 		for (UINT n = 0; n < _FRAME_COUNT; n++) {
-			hr = _dxgiSwapChain->GetBuffer(n, IID_PPV_ARGS(&_renderTargets[n]));
+			hr = _dxgiSwapChain->GetBuffer(n, IID_PPV_ARGS(_renderTargets[n].put()));
 			if (FAILED(hr)) {
 				SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("GetBuffer 失败", hr));
 				return false;
 			}
-			_d3dDevice->CreateRenderTargetView(_renderTargets[n].Get(), nullptr, rtvHandle);
+			_d3dDevice->CreateRenderTargetView(_renderTargets[n].get(), nullptr, rtvHandle);
 			rtvHandle.Offset(_rtvDescriptorSize);
 		}
 	}
 	
 	// 创建命令分配器
-	hr = _d3dDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&_cmdAllocator));
+	hr = _d3dDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(_cmdAllocator.put()));
 	if (FAILED(hr)) {
 		SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("创建命令分配器 失败", hr));
 		return false;
@@ -398,15 +393,16 @@ bool NewRenderer::_LoadAssets() {
 		D3D12_ROOT_SIGNATURE_DESC rootSignDesc{};
 		rootSignDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
 
-		ComPtr<ID3DBlob> signature;
-		ComPtr<ID3DBlob> error;
-		HRESULT hr = D3D12SerializeRootSignature(&rootSignDesc, D3D_ROOT_SIGNATURE_VERSION_1, &signature, &error);
+		winrt::com_ptr<ID3DBlob> signature;
+		winrt::com_ptr<ID3DBlob> error;
+		HRESULT hr = D3D12SerializeRootSignature(&rootSignDesc, D3D_ROOT_SIGNATURE_VERSION_1, signature.put(), error.put());
 		if (FAILED(hr)) {
 			SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg(fmt::format("D3D12SerializeRootSignature 失败：{}", (const char*)error->GetBufferPointer()), hr));
 			return false;
 		}
 
-		hr = _d3dDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&_rootSignature));
+		hr = _d3dDevice->CreateRootSignature(0, signature->GetBufferPointer(),
+			signature->GetBufferSize(), IID_PPV_ARGS(_rootSignature.put()));
 		if (FAILED(hr)) {
 			SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("CreateRootSignature 失败", hr));
 			return false;
@@ -415,8 +411,8 @@ bool NewRenderer::_LoadAssets() {
 	
 	// 编译和加载着色器
 	{
-		ComPtr<ID3DBlob> vertexShader;
-		ComPtr<ID3DBlob> pixelShader;
+		winrt::com_ptr<ID3DBlob> vertexShader;
+		winrt::com_ptr<ID3DBlob> pixelShader;
 
 #ifdef _DEBUG
 		// Enable better shader debugging with the graphics debugging tools.
@@ -426,14 +422,14 @@ bool NewRenderer::_LoadAssets() {
 #endif
 
 		hr = D3DCompile(shaderHlsl, StrUtils::StrLen(shaderHlsl), nullptr, nullptr,
-			nullptr, "VSMain", "vs_5_1", compileFlags, 0, &vertexShader, nullptr);
+			nullptr, "VSMain", "vs_5_1", compileFlags, 0, vertexShader.put(), nullptr);
 		if (FAILED(hr)) {
 			SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("编译顶点着色器失败", hr));
 			return false;
 		}
 
 		hr = D3DCompile(shaderHlsl, StrUtils::StrLen(shaderHlsl), nullptr, nullptr,
-			nullptr, "PSMain", "ps_5_1", compileFlags, 0, &pixelShader, nullptr);
+			nullptr, "PSMain", "ps_5_1", compileFlags, 0, pixelShader.put(), nullptr);
 		if (FAILED(hr)) {
 			SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("编译像素着色器失败", hr));
 			return false;
@@ -448,7 +444,7 @@ bool NewRenderer::_LoadAssets() {
 		// 创建图形管道状态对象（PSO）
 		D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc{};
 		psoDesc.InputLayout = { inputElementDescs, (UINT)std::size(inputElementDescs) };
-		psoDesc.pRootSignature = _rootSignature.Get();
+		psoDesc.pRootSignature = _rootSignature.get();
 		psoDesc.VS = { (UINT8*)vertexShader->GetBufferPointer(), vertexShader->GetBufferSize() };
 		psoDesc.PS = { (UINT8*)pixelShader->GetBufferPointer(), pixelShader->GetBufferSize() };
 		psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
@@ -459,7 +455,7 @@ bool NewRenderer::_LoadAssets() {
 		psoDesc.RTVFormats[0] = DXGI_FORMAT_B8G8R8A8_UNORM;
 		psoDesc.SampleDesc.Count = 1;
 
-		hr = _d3dDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_pipelineState));
+		hr = _d3dDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(m_pipelineState.put()));
 		if (FAILED(hr)) {
 			SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("CreateGraphicsPipelineState 失败", hr));
 			return false;
@@ -467,7 +463,7 @@ bool NewRenderer::_LoadAssets() {
 	}
 
 	// 创建命令列表
-	hr = _d3dDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, _cmdAllocator.Get(), m_pipelineState.Get(), IID_PPV_ARGS(&m_commandList));
+	hr = _d3dDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, _cmdAllocator.get(), m_pipelineState.get(), IID_PPV_ARGS(m_commandList.put()));
 	if (FAILED(hr)) {
 		SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("CreateCommandList 失败", hr));
 		return false;
@@ -493,7 +489,7 @@ bool NewRenderer::_LoadAssets() {
 
 		CD3DX12_HEAP_PROPERTIES heapProps(D3D12_HEAP_TYPE_UPLOAD);
 		auto desc = CD3DX12_RESOURCE_DESC::Buffer(vertexBufferSize);
-		hr = _d3dDevice->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&m_vertexBuffer));
+		hr = _d3dDevice->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(m_vertexBuffer.put()));
 		if (FAILED(hr)) {
 			SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("创建顶点缓冲区失败", hr));
 			return false;
@@ -519,7 +515,7 @@ bool NewRenderer::_LoadAssets() {
 
 	// 创建同步对象
 	{
-		hr = _d3dDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_fence));
+		hr = _d3dDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(m_fence.put()));
 		if (FAILED(hr)) {
 			SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("CreateFence 失败", hr));
 			return false;
@@ -542,15 +538,15 @@ bool NewRenderer::_LoadAssets() {
 bool NewRenderer::_PopulateCommandList() {
 	_cmdAllocator->Reset();
 
-	m_commandList->Reset(_cmdAllocator.Get(), m_pipelineState.Get());
+	m_commandList->Reset(_cmdAllocator.get(), m_pipelineState.get());
 
 	// Set necessary state.
-	m_commandList->SetGraphicsRootSignature(_rootSignature.Get());
+	m_commandList->SetGraphicsRootSignature(_rootSignature.get());
 	m_commandList->RSSetViewports(1, &m_viewport);
 	m_commandList->RSSetScissorRects(1, &m_scissorRect);
 
 	// Indicate that the back buffer will be used as a render target.
-	auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(_renderTargets[m_frameIndex].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+	auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(_renderTargets[m_frameIndex].get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
 	m_commandList->ResourceBarrier(1, &barrier);
 
 	CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(_rtvHeap->GetCPUDescriptorHandleForHeapStart(), m_frameIndex, _rtvDescriptorSize);
@@ -564,7 +560,7 @@ bool NewRenderer::_PopulateCommandList() {
 	m_commandList->DrawInstanced(3, 1, 0, 0);
 
 	// Indicate that the back buffer will now be used to present.
-	barrier = CD3DX12_RESOURCE_BARRIER::Transition(_renderTargets[m_frameIndex].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
+	barrier = CD3DX12_RESOURCE_BARRIER::Transition(_renderTargets[m_frameIndex].get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
 	m_commandList->ResourceBarrier(1, &barrier);
 
 	m_commandList->Close();
@@ -574,7 +570,7 @@ bool NewRenderer::_PopulateCommandList() {
 bool NewRenderer::_WaitForPreviousFrame() {
 	// Signal and increment the fence value.
 	const UINT64 fence = m_fenceValue;
-	HRESULT hr = _cmdQueue->Signal(m_fence.Get(), fence);
+	HRESULT hr = _cmdQueue->Signal(m_fence.get(), fence);
 	if (FAILED(hr)) {
 		return false;
 	}

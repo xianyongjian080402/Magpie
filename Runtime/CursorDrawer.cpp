@@ -388,14 +388,14 @@ bool CursorDrawer::_ResolveCursor(HCURSOR hCursor, _CursorInfo& result) const {
 
 	if(!result.hasInv) {
 		// 光标无反色部分，使用 WIC 将光标转换为带 Alpha 通道的图像
-		ComPtr<IWICImagingFactory2> wicFactory = App::GetInstance().GetWICImageFactory();
+		winrt::com_ptr<IWICImagingFactory2> wicFactory = App::GetInstance().GetWICImageFactory();
 		if (!wicFactory) {
 			SPDLOG_LOGGER_ERROR(logger, "获取 WICImageFactory 失败");
 			return false;
 		}
 
-		ComPtr<IWICBitmap> wicBitmap;
-		HRESULT hr = wicFactory->CreateBitmapFromHICON(hCursor, &wicBitmap);
+		winrt::com_ptr<IWICBitmap> wicBitmap;
+		HRESULT hr = wicFactory->CreateBitmapFromHICON(hCursor, wicBitmap.put());
 		if (FAILED(hr)) {
 			SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("CreateBitmapFromHICON 失败", hr));
 			return false;

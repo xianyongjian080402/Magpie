@@ -36,7 +36,7 @@ bool FrameRateDrawer::Initialize(ComPtr<ID3D11Texture2D> renderTarget, const REC
 }
 
 void FrameRateDrawer::Draw() {
-	const StepTimer& timer = App::GetInstance().GetRenderer().GetTimer();
+	const FrameTimer& timer = App::GetInstance().GetRenderer().GetTimer();
 
 	_d3dDC->OMSetRenderTargets(1, &_rtv, nullptr);
 	_d3dDC->RSSetViewports(1, &_vp);

@@ -1,6 +1,7 @@
 #pragma once
 #include "pch.h"
 #include "Utils.h"
+#include "FrameTimer.h"
 
 
 class NewRenderer {
@@ -52,5 +53,8 @@ private:
     Utils::ScopedHandle m_fenceEvent;
     winrt::com_ptr<ID3D12Fence> m_fence;
     UINT64 m_fenceValue;
+
+    bool _waitingForNextFrame = false;
+    FrameTimer _timer;
 };
 

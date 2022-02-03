@@ -29,6 +29,14 @@ bool NewRenderer::Initialize() {
 }
 
 void NewRenderer::Render() {
+	int frameRate = App::GetInstance().GetFrameRate();
+
+	if (!_waitingForNextFrame && frameRate == 0) {
+		WaitForSingleObjectEx(_frameLatencyWaitableObject.get(), 1000, TRUE);
+	}
+
+	_timer.Tick();
+
 	_PopulateCommandList();
 
 	ID3D12CommandList* ppCommandLists[] = { m_commandList.get() };
@@ -395,6 +403,7 @@ bool NewRenderer::_LoadAssets() {
 
 		winrt::com_ptr<ID3DBlob> signature;
 		winrt::com_ptr<ID3DBlob> error;
+		
 		HRESULT hr = D3D12SerializeRootSignature(&rootSignDesc, D3D_ROOT_SIGNATURE_VERSION_1, signature.put(), error.put());
 		if (FAILED(hr)) {
 			SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg(fmt::format("D3D12SerializeRootSignature 失败：{}", (const char*)error->GetBufferPointer()), hr));

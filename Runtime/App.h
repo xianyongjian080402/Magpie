@@ -29,7 +29,7 @@ public:
 		UINT flags
 	);
 
-	void Close();
+	void Quit();
 
 	HINSTANCE GetHInstance() const {
 		return _hInst;
@@ -144,8 +144,6 @@ public:
 
 	winrt::com_ptr<IWICImagingFactory2> GetWICImageFactory();
 
-	bool RegisterTimer(UINT uElapse, std::function<void()> cb);
-
 private:
 	App() {}
 
@@ -209,8 +207,4 @@ private:
 	std::unique_ptr<NewRenderer> _newRenderer;
 	std::unique_ptr<FrameSourceBase> _frameSource;
 	winrt::com_ptr<IWICImagingFactory2> _wicImgFactory;
-
-	UINT _nextTimerId = 1;
-	// 存储所有计时器回调
-	std::vector<std::function<void()>> _timerCbs;
 };

@@ -4,7 +4,7 @@
 #include "CursorDrawer.h"
 #include "FrameRateDrawer.h"
 #include <CommonStates.h>
-#include "StepTimer.h"
+#include "FrameTimer.h"
 #include "Utils.h"
 
 
@@ -50,11 +50,11 @@ public:
 
 	bool SetAlphaBlend(bool enable);
 
-	StepTimer& GetTimer() {
+	FrameTimer& GetTimer() {
 		return _timer;
 	}
 
-	const StepTimer& GetTimer() const {
+	const FrameTimer& GetTimer() const {
 		return _timer;
 	}
 
@@ -76,8 +76,6 @@ private:
 	bool _CheckSrcState();
 
 	bool _ResolveEffectsJson(const std::string& effectsJson, RECT& destRect);
-
-	void _Render();
 
 	RECT _srcWndRect{};
 
@@ -114,5 +112,5 @@ private:
 	CursorDrawer _cursorDrawer;
 	FrameRateDrawer _frameRateDrawer;
 
-	StepTimer _timer;
+	FrameTimer _timer;
 };

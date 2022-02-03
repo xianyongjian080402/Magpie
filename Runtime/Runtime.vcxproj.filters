@@ -19,9 +19,6 @@
     <ClCompile Include="Renderer.cpp">
       <Filter>渲染</Filter>
     </ClCompile>
-    <ClCompile Include="StepTimer.cpp">
-      <Filter>渲染</Filter>
-    </ClCompile>
     <ClCompile Include="App.cpp">
       <Filter>应用程序</Filter>
     </ClCompile>
@@ -64,6 +61,12 @@
     <ClCompile Include="NewRenderer.cpp">
       <Filter>渲染</Filter>
     </ClCompile>
+    <ClCompile Include="DeviceResources.cpp">
+      <Filter>渲染</Filter>
+    </ClCompile>
+    <ClCompile Include="FrameTimer.cpp">
+      <Filter>渲染</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="resource.h">
@@ -90,7 +93,7 @@
     <ClInclude Include="Renderer.h">
       <Filter>渲染</Filter>
     </ClInclude>
-    <ClInclude Include="StepTimer.h">
+    <ClInclude Include="FrameTimer.h">
       <Filter>渲染</Filter>
     </ClInclude>
     <ClInclude Include="App.h">
@@ -139,7 +142,10 @@
       <Filter>渲染</Filter>
     </ClInclude>
     <ClInclude Include="d3dx12.h">
-      <Filter>应用程序</Filter>
+      <Filter>渲染</Filter>
+    </ClInclude>
+    <ClInclude Include="DeviceResources.h">
+      <Filter>渲染</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

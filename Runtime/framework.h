@@ -48,8 +48,13 @@
 #include <d3d11_1.h>
 #include <d3d12.h>
 #include <d3dcompiler.h>
-#include <dxgi1_5.h>
 #include <dxgi1_6.h>
+#include <DirectXColors.h>
+
+#ifdef _DEBUG
+#include <dxgidebug.h>
+#endif
+
 #include "d3dx12.h"
 
 // C++ 运行时头文件

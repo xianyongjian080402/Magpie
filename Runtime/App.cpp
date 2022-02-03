@@ -173,7 +173,7 @@ bool App::Run(
 	_newRenderer.reset(new NewRenderer());
 	if (!_newRenderer->Initialize()) {
 		SPDLOG_LOGGER_CRITICAL(logger, "初始化 Renderer 失败，正在清理");
-		Close();
+		Quit();
 		_Run();
 		return false;
 	}
@@ -231,18 +231,6 @@ winrt::com_ptr<IWICImagingFactory2> App::GetWICImageFactory() {
 	}
 
 	return _wicImgFactory;
-}
-
-bool App::RegisterTimer(UINT uElapse, std::function<void()> cb) {
-	if (!SetTimer(_hwndHost, _nextTimerId, uElapse, nullptr)) {
-		SPDLOG_LOGGER_ERROR(logger, MakeWin32ErrorMsg("SetTimer 失败"));
-		return false;
-	}
-
-	++_nextTimerId;
-	_timerCbs.emplace_back(std::move(cb));
-
-	return true;
 }
 
 
@@ -454,7 +442,7 @@ LRESULT App::_HostWndProcStatic(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPara
 LRESULT App::_HostWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
 	if (message == WM_DESTORYHOST) {
 		SPDLOG_LOGGER_INFO(logger, "收到 MAGPIE_WM_DESTORYHOST 消息，即将销毁主窗口");
-		Close();
+		Quit();
 		return 0;
 	}
 
@@ -465,15 +453,6 @@ LRESULT App::_HostWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		// 1. 前台窗口发生改变
 		// 2. 收到_WM_DESTORYMAG 消息
 		PostQuitMessage(0);
-		return 0;
-	}
-	case WM_TIMER:
-	{
-		if (hWnd != _hwndHost || wParam <= 0 || wParam > _timerCbs.size()) {
-			break;
-		}
-
-		_timerCbs[wParam - 1]();
 		return 0;
 	}
 	default:
@@ -488,10 +467,6 @@ void App::_OnQuit() {
 	_frameSource = nullptr;
 	//_renderer = nullptr;
 	_newRenderer = nullptr;
-
-	// 计时器资源在窗口销毁时自动释放
-	_nextTimerId = 1;
-	_timerCbs.clear();
 
 	// 还原窗口圆角
 	if (_roundCornerDisabled) {
@@ -528,7 +503,7 @@ void App::_OnQuit() {
 	SPDLOG_LOGGER_INFO(logger, "主窗口已销毁");
 }
 
-void App::Close() {
+void App::Quit() {
 	if (_hwndDDF) {
 		DestroyWindow(_hwndDDF);
 	}

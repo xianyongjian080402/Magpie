@@ -143,53 +143,37 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="App.h" />
-    <ClInclude Include="CursorDrawer.h" />
     <ClInclude Include="d3dx12.h" />
     <ClInclude Include="DesktopDuplicationFrameSource.h" />
     <ClInclude Include="DeviceResources.h" />
-    <ClInclude Include="EffectCache.h" />
-    <ClInclude Include="EffectDrawer.h" />
-    <ClInclude Include="EffectCompiler.h" />
-    <ClInclude Include="EffectDesc.h" />
     <ClInclude Include="ErrorMessages.h" />
     <ClInclude Include="ExclModeHack.h" />
-    <ClInclude Include="FrameRateDrawer.h" />
     <ClInclude Include="FrameSourceBase.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="GDIFrameSource.h" />
-    <ClInclude Include="NewRenderer.h" />
-    <ClInclude Include="pch.h" />
     <ClInclude Include="Renderer.h" />
+    <ClInclude Include="pch.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="DwmSharedSurfaceFrameSource.h" />
     <ClInclude Include="FrameTimer.h" />
     <ClInclude Include="StrUtils.h" />
     <ClInclude Include="targetver.h" />
-    <ClInclude Include="TextureLoader.h" />
     <ClInclude Include="Utils.h" />
     <ClInclude Include="GraphicsCaptureFrameSource.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="App.cpp" />
-    <ClCompile Include="CursorDrawer.cpp" />
     <ClCompile Include="DesktopDuplicationFrameSource.cpp" />
     <ClCompile Include="DeviceResources.cpp" />
-    <ClCompile Include="EffectCache.cpp" />
-    <ClCompile Include="EffectDesc.cpp" />
-    <ClCompile Include="EffectDrawer.cpp" />
-    <ClCompile Include="EffectCompiler.cpp" />
     <ClCompile Include="ExclModeHack.cpp" />
-    <ClCompile Include="FrameRateDrawer.cpp" />
     <ClCompile Include="FrameSourceBase.cpp" />
     <ClCompile Include="FrameTimer.cpp" />
     <ClCompile Include="GDIFrameSource.cpp" />
-    <ClCompile Include="NewRenderer.cpp" />
+    <ClCompile Include="Renderer.cpp" />
     <ClCompile Include="pch.cpp" />
     <ClCompile Include="DllMain.cpp" />
-    <ClCompile Include="Renderer.cpp" />
     <ClCompile Include="DwmSharedSurfaceFrameSource.cpp" />
     <ClCompile Include="StrUtils.cpp" />
-    <ClCompile Include="TextureLoader.cpp" />
     <ClCompile Include="Utils.cpp" />
     <ClCompile Include="GraphicsCaptureFrameSource.cpp" />
   </ItemGroup>

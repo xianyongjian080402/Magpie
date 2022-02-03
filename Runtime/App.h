@@ -1,12 +1,17 @@
 #pragma once
 #include "pch.h"
-#include "Renderer.h"
-#include "FrameSourceBase.h"
-#include "NewRenderer.h"
+
+
+class DeviceResources;
+class Renderer;
+class FrameSourceBase;
 
 
 class App {
 public:
+	App(const App&) = delete;
+	App(App&&) = delete;
+
 	~App();
 
 	static App& GetInstance() {
@@ -53,8 +58,11 @@ public:
 		return _hostWndRect;
 	}
 
+	DeviceResources& GetDeviceResources() {
+		return *_deviceResources;
+	}
+
 	Renderer& GetRenderer() {
-		assert(false);
 		return *_renderer;
 	}
 
@@ -145,7 +153,7 @@ public:
 	winrt::com_ptr<IWICImagingFactory2> GetWICImageFactory();
 
 private:
-	App() {}
+	App();
 
 	void _Run();
 
@@ -203,8 +211,8 @@ private:
 	bool _windowResizingDisabled = false;
 	bool _roundCornerDisabled = false;
 
+	std::unique_ptr<DeviceResources> _deviceResources;
 	std::unique_ptr<Renderer> _renderer;
-	std::unique_ptr<NewRenderer> _newRenderer;
 	std::unique_ptr<FrameSourceBase> _frameSource;
 	winrt::com_ptr<IWICImagingFactory2> _wicImgFactory;
 };

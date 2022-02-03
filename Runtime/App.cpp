@@ -6,6 +6,8 @@
 #include "DwmSharedSurfaceFrameSource.h"
 #include "DesktopDuplicationFrameSource.h"
 #include "ExclModeHack.h"
+#include "DeviceResources.h"
+#include "Renderer.h"
 
 
 extern std::shared_ptr<spdlog::logger> logger;
@@ -98,7 +100,7 @@ bool App::Run(
 	/*
 	_renderer.reset(new Renderer());
 	if (!_renderer->Initialize()) {
-		SPDLOG_LOGGER_CRITICAL(logger, "初始化 Renderer 失败，正在清理");
+		SPDLOG_LOGGER_CRITICAL(logger, "初始化 Renderer 失败");
 		Close();
 		_Run();
 		return false;
@@ -120,14 +122,14 @@ bool App::Run(
 		_frameSource.reset(new DwmSharedSurfaceFrameSource());
 		break;
 	default:
-		SPDLOG_LOGGER_CRITICAL(logger, "未知的捕获模式，即将退出");
+		SPDLOG_LOGGER_CRITICAL(logger, "未知的捕获模式");
 		Close();
 		_Run();
 		return false;
 	}
 	
 	if (!_frameSource->Initialize()) {
-		SPDLOG_LOGGER_CRITICAL(logger, "初始化 FrameSource 失败，即将退出");
+		SPDLOG_LOGGER_CRITICAL(logger, "初始化 FrameSource 失败");
 		Close();
 		_Run();
 		return false;
@@ -164,15 +166,23 @@ bool App::Run(
 	}
 
 	if (!_renderer->InitializeEffectsAndCursor(effectsJson)) {
-		SPDLOG_LOGGER_CRITICAL(logger, "初始化效果失败，即将退出");
+		SPDLOG_LOGGER_CRITICAL(logger, "初始化效果失败");
 		Close();
 		_Run();
 		return false;
 	}*/
 
-	_newRenderer.reset(new NewRenderer());
-	if (!_newRenderer->Initialize()) {
-		SPDLOG_LOGGER_CRITICAL(logger, "初始化 Renderer 失败，正在清理");
+	_deviceResources.reset(new DeviceResources());
+	if (!_deviceResources->Initialize()) {
+		SPDLOG_LOGGER_CRITICAL(logger, "初始化 DeviceResources 失败");
+		Quit();
+		_Run();
+		return false;
+	}
+
+	_renderer.reset(new Renderer());
+	if (!_renderer->Initialize()) {
+		SPDLOG_LOGGER_CRITICAL(logger, "初始化 Renderer 失败");
 		Quit();
 		_Run();
 		return false;
@@ -184,6 +194,8 @@ bool App::Run(
 
 	return true;
 }
+
+App::App() {}
 
 void App::_Run() {
 	SPDLOG_LOGGER_INFO(logger, "开始接收窗口消息");
@@ -200,7 +212,7 @@ void App::_Run() {
 			DispatchMessage(&msg);
 		}
 		
-		_newRenderer->Render();
+		_renderer->Render();
 		/*
 		// 第二帧（等待时或完成后）显示 DDF 窗口
 		// 如果在 Run 中创建会有短暂的灰屏
@@ -464,9 +476,9 @@ LRESULT App::_HostWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 void App::_OnQuit() {
 	// 释放资源
+	_deviceResources = nullptr;
 	_frameSource = nullptr;
-	//_renderer = nullptr;
-	_newRenderer = nullptr;
+	_renderer = nullptr;
 
 	// 还原窗口圆角
 	if (_roundCornerDisabled) {

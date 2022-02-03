@@ -10,15 +10,6 @@
     <ClCompile Include="GDIFrameSource.cpp">
       <Filter>捕获</Filter>
     </ClCompile>
-    <ClCompile Include="CursorDrawer.cpp">
-      <Filter>渲染</Filter>
-    </ClCompile>
-    <ClCompile Include="FrameRateDrawer.cpp">
-      <Filter>渲染</Filter>
-    </ClCompile>
-    <ClCompile Include="Renderer.cpp">
-      <Filter>渲染</Filter>
-    </ClCompile>
     <ClCompile Include="App.cpp">
       <Filter>应用程序</Filter>
     </ClCompile>
@@ -34,21 +25,6 @@
     <ClCompile Include="StrUtils.cpp">
       <Filter>应用程序</Filter>
     </ClCompile>
-    <ClCompile Include="EffectDrawer.cpp">
-      <Filter>渲染</Filter>
-    </ClCompile>
-    <ClCompile Include="EffectCompiler.cpp">
-      <Filter>渲染</Filter>
-    </ClCompile>
-    <ClCompile Include="EffectCache.cpp">
-      <Filter>渲染</Filter>
-    </ClCompile>
-    <ClCompile Include="EffectDesc.cpp">
-      <Filter>渲染</Filter>
-    </ClCompile>
-    <ClCompile Include="TextureLoader.cpp">
-      <Filter>渲染</Filter>
-    </ClCompile>
     <ClCompile Include="FrameSourceBase.cpp">
       <Filter>捕获</Filter>
     </ClCompile>
@@ -58,7 +34,7 @@
     <ClCompile Include="ExclModeHack.cpp">
       <Filter>应用程序</Filter>
     </ClCompile>
-    <ClCompile Include="NewRenderer.cpp">
+    <ClCompile Include="Renderer.cpp">
       <Filter>渲染</Filter>
     </ClCompile>
     <ClCompile Include="DeviceResources.cpp">
@@ -84,15 +60,6 @@
     <ClInclude Include="GDIFrameSource.h">
       <Filter>捕获</Filter>
     </ClInclude>
-    <ClInclude Include="CursorDrawer.h">
-      <Filter>渲染</Filter>
-    </ClInclude>
-    <ClInclude Include="FrameRateDrawer.h">
-      <Filter>渲染</Filter>
-    </ClInclude>
-    <ClInclude Include="Renderer.h">
-      <Filter>渲染</Filter>
-    </ClInclude>
     <ClInclude Include="FrameTimer.h">
       <Filter>渲染</Filter>
     </ClInclude>
@@ -117,28 +84,13 @@
     <ClInclude Include="StrUtils.h">
       <Filter>应用程序</Filter>
     </ClInclude>
-    <ClInclude Include="EffectDrawer.h">
-      <Filter>渲染</Filter>
-    </ClInclude>
-    <ClInclude Include="EffectDesc.h">
-      <Filter>渲染</Filter>
-    </ClInclude>
-    <ClInclude Include="EffectCompiler.h">
-      <Filter>渲染</Filter>
-    </ClInclude>
-    <ClInclude Include="EffectCache.h">
-      <Filter>渲染</Filter>
-    </ClInclude>
-    <ClInclude Include="TextureLoader.h">
-      <Filter>渲染</Filter>
-    </ClInclude>
     <ClInclude Include="DesktopDuplicationFrameSource.h">
       <Filter>捕获</Filter>
     </ClInclude>
     <ClInclude Include="ExclModeHack.h">
       <Filter>应用程序</Filter>
     </ClInclude>
-    <ClInclude Include="NewRenderer.h">
+    <ClInclude Include="Renderer.h">
       <Filter>渲染</Filter>
     </ClInclude>
     <ClInclude Include="d3dx12.h">

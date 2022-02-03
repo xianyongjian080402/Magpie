@@ -1,116 +1,64 @@
 #pragma once
 #include "pch.h"
-#include "EffectDrawer.h"
-#include "CursorDrawer.h"
-#include "FrameRateDrawer.h"
-#include <CommonStates.h>
-#include "FrameTimer.h"
 #include "Utils.h"
+#include "FrameTimer.h"
 
 
 class Renderer {
 public:
+    Renderer() = default;
+    Renderer(const Renderer&) = delete;
+    Renderer(Renderer&&) = delete;
+
+    ~Renderer();
+
 	bool Initialize();
 
-	bool InitializeEffectsAndCursor(const std::string& effectsJson);
-
-	void Render();
-
-	bool GetSampler(EffectSamplerFilterType filterType, EffectSamplerAddressType addressType, ID3D11SamplerState** result);
-
-	ComPtr<ID3D11Device1> GetD3DDevice() const{
-		return _d3dDevice;
-	}
-
-	ComPtr<ID3D11DeviceContext1> GetD3DDC() const {
-		return _d3dDC;
-	}
-
-	ComPtr<IDXGIDevice1> GetDXGIDevice() const {
-		return _dxgiDevice;
-	}
-
-	ComPtr<IDXGIFactory2> GetDXGIFactory() const {
-		return _dxgiFactory;
-	}
-
-	ComPtr<IDXGIAdapter1> GetGraphicsAdapter() const {
-		return _graphicsAdapter;
-	}
-
-	bool GetRenderTargetView(ID3D11Texture2D* texture, ID3D11RenderTargetView** result);
-
-	bool GetShaderResourceView(ID3D11Texture2D* texture, ID3D11ShaderResourceView** result);
-
-	bool SetFillVS();
-
-	bool SetSimpleVS(ID3D11Buffer* simpleVB);
-
-	bool SetCopyPS(ID3D11SamplerState* sampler, ID3D11ShaderResourceView* input);
-
-	bool SetAlphaBlend(bool enable);
-
-	FrameTimer& GetTimer() {
-		return _timer;
-	}
-
-	const FrameTimer& GetTimer() const {
-		return _timer;
-	}
-
-	D3D_FEATURE_LEVEL GetFeatureLevel() const {
-		return _featureLevel;
-	}
-
-	bool CompileShader(bool isVS, std::string_view hlsl, const char* entryPoint,
-		ID3DBlob** blob, const char* sourceName = nullptr, ID3DInclude* include = nullptr);
-
-	// 测试 D3D 调试层是否可用
-	static bool IsDebugLayersAvailable();
+    void Render();
 
 private:
-	bool _InitD3D();
+    bool _CreateSwapChain();
 
-	bool _CreateSwapChain();
+    bool _LoadPipeline();
+    bool _LoadAssets();
+    bool _PopulateCommandList();
+    bool _WaitForPreviousFrame();
 
-	bool _CheckSrcState();
+    static constexpr int _FRAME_COUNT = 2;
 
-	bool _ResolveEffectsJson(const std::string& effectsJson, RECT& destRect);
+    struct Vertex {
+        XMFLOAT3 position;
+        XMFLOAT4 color;
+    };
 
-	RECT _srcWndRect{};
+    winrt::com_ptr<IDXGIFactory4> _dxgiFactory;
+    Utils::ScopedHandle _frameLatencyWaitableObject = NULL;
 
-	D3D_FEATURE_LEVEL _featureLevel = D3D_FEATURE_LEVEL_10_0;
-	bool _supportTearing = false;
+    // Pipeline objects.
+    CD3DX12_VIEWPORT m_viewport;
+    CD3DX12_RECT m_scissorRect;
+    winrt::com_ptr<IDXGISwapChain3> _dxgiSwapChain;
+    winrt::com_ptr<ID3D12Device> _d3dDevice;
+    std::array<winrt::com_ptr<ID3D12Resource>, _FRAME_COUNT> _renderTargets;
+    winrt::com_ptr<ID3D12CommandAllocator> _cmdAllocator;
+    winrt::com_ptr<ID3D12CommandQueue> _cmdQueue;
+    winrt::com_ptr<ID3D12RootSignature> _rootSignature;
+    winrt::com_ptr<ID3D12DescriptorHeap> _rtvHeap;
+    winrt::com_ptr<ID3D12PipelineState> m_pipelineState;
+    winrt::com_ptr<ID3D12GraphicsCommandList> m_commandList;
+    UINT _rtvDescriptorSize;
 
-	ComPtr<IDXGIFactory2> _dxgiFactory;
-	ComPtr<IDXGIDevice1> _dxgiDevice;
-	ComPtr<IDXGISwapChain2> _dxgiSwapChain;
-	ComPtr<IDXGIAdapter1> _graphicsAdapter;
-	ComPtr<ID3D11Device1> _d3dDevice;
-	ComPtr<ID3D11DeviceContext1> _d3dDC;
+    // App resources.
+    winrt::com_ptr<ID3D12Resource> m_vertexBuffer;
+    D3D12_VERTEX_BUFFER_VIEW m_vertexBufferView;
 
-	Utils::ScopedHandle _frameLatencyWaitableObject = NULL;
-	bool _waitingForNextFrame = false;
+    // Synchronization objects.
+    UINT m_frameIndex;
+    Utils::ScopedHandle m_fenceEvent;
+    winrt::com_ptr<ID3D12Fence> m_fence;
+    UINT64 m_fenceValue;
 
-	ComPtr<ID3D11SamplerState> _linearClampSampler;
-	ComPtr<ID3D11SamplerState> _pointClampSampler;
-	ComPtr<ID3D11SamplerState> _linearWrapSampler;
-	ComPtr<ID3D11SamplerState> _pointWrapSampler;
-	ComPtr<ID3D11BlendState> _alphaBlendState;
-
-	ComPtr<ID3D11Texture2D> _effectInput;
-	ComPtr<ID3D11Texture2D> _backBuffer;
-	std::unordered_map<ID3D11Texture2D*, ComPtr<ID3D11RenderTargetView>> _rtvMap;
-	std::unordered_map<ID3D11Texture2D*, ComPtr<ID3D11ShaderResourceView>> _srvMap;
-
-	ComPtr<ID3D11VertexShader> _fillVS;
-	ComPtr<ID3D11VertexShader> _simpleVS;
-	ComPtr<ID3D11InputLayout> _simpleIL;
-	ComPtr<ID3D11PixelShader> _copyPS;
-	std::vector<EffectDrawer> _effects;
-
-	CursorDrawer _cursorDrawer;
-	FrameRateDrawer _frameRateDrawer;
-
-	FrameTimer _timer;
+    bool _waitingForNextFrame = false;
+    FrameTimer _timer;
 };
+

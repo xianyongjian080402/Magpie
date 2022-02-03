@@ -1,7 +1,10 @@
 #include "pch.h"
 #include "DesktopDuplicationFrameSource.h"
 #include "App.h"
+#include "Utils.h"
 
+
+extern std::shared_ptr<spdlog::logger> logger;
 
 static ComPtr<IDXGIOutput1> FindMonitor(ComPtr<IDXGIAdapter1> adapter, HMONITOR hMonitor) {
 	ComPtr<IDXGIOutput> output;
@@ -35,7 +38,7 @@ static ComPtr<IDXGIOutput1> FindMonitor(ComPtr<IDXGIAdapter1> adapter, HMONITOR 
 
 // 根据显示器句柄查找 IDXGIOutput1
 static ComPtr<IDXGIOutput1> GetDXGIOutput(HMONITOR hMonitor) {
-	const Renderer& renderer = App::GetInstance().GetRenderer();
+	/*const Renderer& renderer = App::GetInstance().GetRenderer();
 	ComPtr<IDXGIAdapter1> curAdapter = App::GetInstance().GetRenderer().GetGraphicsAdapter();
 
 	// 首先在当前使用的图形适配器上查询显示器
@@ -60,7 +63,7 @@ static ComPtr<IDXGIOutput1> GetDXGIOutput(HMONITOR hMonitor) {
 		if (output) {
 			return output;
 		}
-	}
+	}*/
 
 	return nullptr;
 }
@@ -77,7 +80,7 @@ bool DesktopDuplicationFrameSource::Initialize() {
 		SPDLOG_LOGGER_ERROR(logger, "当前操作系统无法使用 Desktop Duplication");
 		return false;
 	}
-
+	/*
 	HWND hwndSrc = App::GetInstance().GetHwndSrc();
 
 	HMONITOR hMonitor = MonitorFromWindow(hwndSrc, MONITOR_DEFAULTTONEAREST);
@@ -192,7 +195,7 @@ bool DesktopDuplicationFrameSource::Initialize() {
 	_hDDPThread = CreateThread(nullptr, 0, _DDPThreadProc, this, 0, nullptr);
 	if (!_hDDPThread) {
 		return false;
-	}
+	}*/
 
 	SPDLOG_LOGGER_INFO(logger, "DesktopDuplicationFrameSource 初始化完成");
 	return true;
@@ -200,7 +203,7 @@ bool DesktopDuplicationFrameSource::Initialize() {
 
 
 FrameSourceBase::UpdateState DesktopDuplicationFrameSource::Update() {
-	UINT newFrameState = _newFrameState.load();
+	/*UINT newFrameState = _newFrameState.load();
 	if (newFrameState == 2) {
 		// 第一帧之前不渲染
 		return UpdateState::Waiting;
@@ -225,12 +228,12 @@ FrameSourceBase::UpdateState DesktopDuplicationFrameSource::Update() {
 	dc->CopyResource(_output.Get(), _sharedTex.Get());
 
 	_sharedTexMutex->ReleaseSync(0);
-
+	*/
 	return UpdateState::NewFrame;
 }
 
 bool DesktopDuplicationFrameSource::_InitializeDdpD3D(HANDLE hSharedTex) {
-	UINT createDeviceFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
+	/*UINT createDeviceFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
 	if (Renderer::IsDebugLayersAvailable()) {
 		// 在 DEBUG 配置启用调试层
 		createDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
@@ -278,7 +281,7 @@ bool DesktopDuplicationFrameSource::_InitializeDdpD3D(HANDLE hSharedTex) {
 	if (FAILED(hr)) {
 		SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("检索 IDXGIKeyedMutex 失败", hr));
 		return false;
-	}
+	}*/
 	
 	return true;
 }

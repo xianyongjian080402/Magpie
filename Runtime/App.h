@@ -36,119 +36,37 @@ public:
 
 	void Quit();
 
-	HINSTANCE GetHInstance() const {
-		return _hInst;
-	}
+	HINSTANCE GetHInstance() const noexcept {return _hInst;}
+	HWND GetHwndHost() const noexcept {return _hwndHost;}
+	const RECT& GetHostWndRect() const noexcept {return _hostWndRect;}
 
-	HWND GetHwndSrc() const {
-		return _hwndSrc;
-	}
+	FrameSourceBase& GetFrameSource() noexcept { return *_frameSource; }
+	DeviceResources& GetDeviceResources() noexcept { return *_deviceResources; }
+	Renderer& GetRenderer() noexcept { return *_renderer; }
 
-	const RECT& GetSrcFrameRect() const {
-		return _srcFrameRect;
-	}
+	HWND GetHwndSrc() const noexcept { return _hwndSrc; }
+	UINT GetCaptureMode() const noexcept { return _captureMode; }
+	float GetCursorZoomFactor() const noexcept { return _cursorZoomFactor; }
+	UINT GetCursorInterpolationMode() const noexcept { return _cursorInterpolationMode; }
+	int GetAdapterIdx() const noexcept {return _adapterIdx;}
+	UINT GetMultiMonitorUsage() const noexcept { return _multiMonitorUsage; }
+	bool IsMultiMonitorMode() const noexcept { return _isMultiMonitorMode; }
+	const RECT& GetCropBorders() const noexcept { return _cropBorders; }
+	bool IsNoCursor() const noexcept { return _flags & (UINT)_FlagMasks::NoCursor; }
+	bool IsAdjustCursorSpeed() const noexcept { return _flags & (UINT)_FlagMasks::AdjustCursorSpeed; }
+	bool IsShowFPS() const noexcept { return _flags & (UINT)_FlagMasks::ShowFPS; }
+	bool IsDisableLowLatency() const noexcept { return _flags & (UINT)_FlagMasks::DisableLowLatency; }
+	bool IsDisableWindowResizing() const noexcept { return _flags & (UINT)_FlagMasks::DisableWindowResizing; }
+	bool IsBreakpointMode() const noexcept { return _flags & (UINT)_FlagMasks::BreakpointMode; }
+	bool IsDisableDirectFlip() const noexcept { return _flags & (UINT)_FlagMasks::DisableDirectFlip; }
+	bool IsConfineCursorIn3DGames() const noexcept { return _flags & (UINT)_FlagMasks::ConfineCursorIn3DGames; }
+	bool IsCropTitleBarOfUWP() const noexcept { return _flags & (UINT)_FlagMasks::CropTitleBarOfUWP; }
+	bool IsDisableEffectCache() const noexcept { return _flags & (UINT)_FlagMasks::DisableEffectCache; }
+	bool IsSimulateExclusiveFullscreen() const noexcept { return _flags & (UINT)_FlagMasks::SimulateExclusiveFullscreen; }
+	bool IsDisableVSync() const noexcept { return _flags & (UINT)_FlagMasks::DisableVSync; }
 
-	bool UpdateSrcFrameRect();
-
-	HWND GetHwndHost() const {
-		return _hwndHost;
-	}
-
-	const RECT& GetHostWndRect() const {
-		return _hostWndRect;
-	}
-
-	DeviceResources& GetDeviceResources() {
-		return *_deviceResources;
-	}
-
-	Renderer& GetRenderer() {
-		return *_renderer;
-	}
-
-	FrameSourceBase& GetFrameSource() {
-		return *_frameSource;
-	}
-
-	UINT GetCaptureMode() const {
-		return _captureMode;
-	}
-
-	int GetFrameRate() const {
-		return _frameRate;
-	}
-
-	float GetCursorZoomFactor() const {
-		return _cursorZoomFactor;
-	}
-
-	UINT GetCursorInterpolationMode() const {
-		return _cursorInterpolationMode;
-	}
-
-	int GetAdapterIdx() const {
-		return _adapterIdx;
-	}
-
-	UINT GetMultiMonitorUsage() const {
-		return _multiMonitorUsage;
-	}
-
-	bool IsMultiMonitorMode() const {
-		return _isMultiMonitorMode;
-	}
-
-	bool IsNoCursor() const {
-		return _flags & (UINT)_FlagMasks::NoCursor;
-	}
-
-	bool IsAdjustCursorSpeed() const {
-		return _flags & (UINT)_FlagMasks::AdjustCursorSpeed;
-	}
-
-	bool IsShowFPS() const {
-		return _flags & (UINT)_FlagMasks::ShowFPS;
-	}
-
-	bool IsDisableLowLatency() const {
-		return _flags & (UINT)_FlagMasks::DisableLowLatency;
-	}
-
-	bool IsDisableWindowResizing() const {
-		return _flags & (UINT)_FlagMasks::DisableWindowResizing;
-	}
-
-	bool IsBreakpointMode() const {
-		return _flags & (UINT)_FlagMasks::BreakpointMode;
-	}
-
-	bool IsDisableDirectFlip() const {
-		return _flags & (UINT)_FlagMasks::DisableDirectFlip;
-	}
-
-	bool IsConfineCursorIn3DGames() const {
-		return _flags & (UINT)_FlagMasks::ConfineCursorIn3DGames;
-	}
-
-	bool IsCropTitleBarOfUWP() const {
-		return _flags & (UINT)_FlagMasks::CropTitleBarOfUWP;
-	}
-
-	bool IsDisableEffectCache() const {
-		return _flags & (UINT)_FlagMasks::DisableEffectCache;
-	}
-
-	bool IsSimulateExclusiveFullscreen() const {
-		return _flags & (UINT)_FlagMasks::SimulateExclusiveFullscreen;
-	}
-
-	const char* GetErrorMsg() const {
-		return _errorMsg;
-	}
-
-	void SetErrorMsg(const char* errorMsg) {
-		_errorMsg = errorMsg;
-	}
+	const char* GetErrorMsg() const noexcept { return _errorMsg; }
+	void SetErrorMsg(const char* errorMsg) noexcept { _errorMsg = errorMsg; }
 
 	winrt::com_ptr<IWICImagingFactory2> GetWICImageFactory();
 
@@ -202,7 +120,8 @@ private:
 		DisableDirectFlip = 0x80,
 		ConfineCursorIn3DGames = 0x100,
 		CropTitleBarOfUWP = 0x200,
-		DisableEffectCache = 0x400
+		DisableEffectCache = 0x400,
+		DisableVSync = 0x800
 	};
 
 	// 多屏幕模式下光标可以在屏幕间自由移动
@@ -214,5 +133,4 @@ private:
 	std::unique_ptr<DeviceResources> _deviceResources;
 	std::unique_ptr<Renderer> _renderer;
 	std::unique_ptr<FrameSourceBase> _frameSource;
-	winrt::com_ptr<IWICImagingFactory2> _wicImgFactory;
 };

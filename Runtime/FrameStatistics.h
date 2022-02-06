@@ -8,9 +8,9 @@
 
 
 // 用于记录帧率和时间
-class FrameTimer {
+class FrameStatistics {
 public:
-    FrameTimer();
+    FrameStatistics();
 
     // Get elapsed time since the previous Update call.
     uint64_t GetElapsedTicks() const noexcept { return m_elapsedTicks; }

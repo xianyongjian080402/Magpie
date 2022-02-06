@@ -40,7 +40,7 @@
     <ClCompile Include="DeviceResources.cpp">
       <Filter>渲染</Filter>
     </ClCompile>
-    <ClCompile Include="FrameTimer.cpp">
+    <ClCompile Include="FrameStatistics.cpp">
       <Filter>渲染</Filter>
     </ClCompile>
   </ItemGroup>
@@ -60,7 +60,7 @@
     <ClInclude Include="GDIFrameSource.h">
       <Filter>捕获</Filter>
     </ClInclude>
-    <ClInclude Include="FrameTimer.h">
+    <ClInclude Include="FrameStatistics.h">
       <Filter>渲染</Filter>
     </ClInclude>
     <ClInclude Include="App.h">

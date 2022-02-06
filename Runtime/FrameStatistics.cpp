@@ -1,8 +1,8 @@
 #include "pch.h"
-#include "FrameTimer.h"
+#include "FrameStatistics.h"
 
 
-FrameTimer::FrameTimer() {
+FrameStatistics::FrameStatistics() {
     // 这两个函数不会失败
     QueryPerformanceFrequency(&m_qpcFrequency);
     QueryPerformanceCounter(&m_qpcLastTime);
@@ -11,7 +11,7 @@ FrameTimer::FrameTimer() {
     m_qpcMaxDelta = static_cast<uint64_t>(m_qpcFrequency.QuadPart / 10);
 }
 
-void FrameTimer::ResetElapsedTime() {
+void FrameStatistics::ResetElapsedTime() {
     QueryPerformanceCounter(&m_qpcLastTime);
 
     m_framesPerSecond = 0;
@@ -19,7 +19,7 @@ void FrameTimer::ResetElapsedTime() {
     m_qpcSecondCounter = 0;
 }
 
-void FrameTimer::Tick() {
+void FrameStatistics::Tick() {
     // Query the current time.
     LARGE_INTEGER currentTime;
 

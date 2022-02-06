@@ -77,7 +77,7 @@ bool GDIFrameSource::Initialize() {
 	return true;
 }
 
-FrameSourceBase::UpdateState GDIFrameSource::Update() {
+FrameSourceBase::UpdateState GDIFrameSource::CaptureFrame() {
 	HWND hwndSrc = App::GetInstance().GetHwndSrc();
 
 	HDC hdcDest;

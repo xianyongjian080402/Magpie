@@ -151,7 +151,7 @@ bool GraphicsCaptureFrameSource::Initialize() {
 	return true;
 }
 
-FrameSourceBase::UpdateState GraphicsCaptureFrameSource::Update() {
+FrameSourceBase::UpdateState GraphicsCaptureFrameSource::CaptureFrame() {
 	// 每次睡眠 1 毫秒等待新帧到达，防止 CPU 占用过高
 	EnterCriticalSection(&_cs);
 

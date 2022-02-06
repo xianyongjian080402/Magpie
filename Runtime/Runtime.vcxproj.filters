@@ -45,9 +45,6 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="resource.h">
-      <Filter>资源文件</Filter>
-    </ClInclude>
     <ClInclude Include="GraphicsCaptureFrameSource.h">
       <Filter>捕获</Filter>
     </ClInclude>
@@ -102,15 +99,9 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="cpp.hint" />
-    <None Include="assets\OpenSans.spritefont">
-      <Filter>资源文件</Filter>
-    </None>
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
-    <Filter Include="资源文件">
-      <UniqueIdentifier>{f3740afe-3a7c-49d0-84ea-04d66feace50}</UniqueIdentifier>
-    </Filter>
     <Filter Include="捕获">
       <UniqueIdentifier>{6b867004-a0fd-4e2b-aa28-8fffcbdc9fbe}</UniqueIdentifier>
     </Filter>
@@ -120,11 +111,6 @@
     <Filter Include="应用程序">
       <UniqueIdentifier>{03b14d85-c703-4e07-94ac-d7ef17b18cf1}</UniqueIdentifier>
     </Filter>
-  </ItemGroup>
-  <ItemGroup>
-    <ResourceCompile Include="Runtime.rc">
-      <Filter>资源文件</Filter>
-    </ResourceCompile>
   </ItemGroup>
   <ItemGroup>
     <Text Include="conanfile.txt" />

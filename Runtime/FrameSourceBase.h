@@ -14,7 +14,7 @@ public:
 
 	virtual bool Initialize() = 0;
 
-	virtual ComPtr<ID3D11Texture2D> GetOutput() = 0;
+	virtual winrt::com_ptr<ID3D12Resource> GetOutput() = 0;
 
 	enum class UpdateState {
 		NewFrame,
@@ -23,7 +23,9 @@ public:
 		Error
 	};
 
-	virtual UpdateState Update() = 0;
+	virtual UpdateState CaptureFrame() = 0;
+
+	virtual void ReleaseFrame() = 0;
 
 	virtual bool HasRoundCornerInWin11() = 0;
 

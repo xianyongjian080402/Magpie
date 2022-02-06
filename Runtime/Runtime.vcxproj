@@ -153,7 +153,6 @@
     <ClInclude Include="GDIFrameSource.h" />
     <ClInclude Include="Renderer.h" />
     <ClInclude Include="pch.h" />
-    <ClInclude Include="resource.h" />
     <ClInclude Include="DwmSharedSurfaceFrameSource.h" />
     <ClInclude Include="FrameStatistics.h" />
     <ClInclude Include="StrUtils.h" />
@@ -178,16 +177,8 @@
     <ClCompile Include="GraphicsCaptureFrameSource.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="assets\OpenSans.spritefont">
-      <FileType>Document</FileType>
-      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(OutDir)assets</DestinationFolders>
-      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)assets</DestinationFolders>
-    </None>
     <None Include="cpp.hint" />
     <None Include="packages.config" />
-  </ItemGroup>
-  <ItemGroup>
-    <ResourceCompile Include="Runtime.rc" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="conanfile.txt" />

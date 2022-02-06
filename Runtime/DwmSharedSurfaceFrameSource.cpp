@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "DwmSharedSurfaceFrameSource.h"
 #include "App.h"
+#include "DeviceResources.h"
 
 
 extern std::shared_ptr<spdlog::logger> logger;
@@ -55,26 +56,26 @@ bool DwmSharedSurfaceFrameSource::Initialize() {
 		1
 	};
 
-	D3D11_TEXTURE2D_DESC desc{};
-	desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
-	desc.Width = frameRect.right - frameRect.left;
-	desc.Height = frameRect.bottom - frameRect.top;
-	desc.MipLevels = 1;
-	desc.ArraySize = 1;
-	desc.SampleDesc.Count = 1;
-	desc.SampleDesc.Quality = 0;
-	desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
-	/*HRESULT hr = App::GetInstance().GetRenderer().GetD3DDevice()->CreateTexture2D(&desc, nullptr, &_output);
+	CD3DX12_HEAP_PROPERTIES heapDesc(D3D12_HEAP_TYPE_DEFAULT);
+	auto desc = CD3DX12_RESOURCE_DESC::Tex2D(
+		DXGI_FORMAT_B8G8R8A8_UNORM,
+		static_cast<UINT64>(frameRect.right) - frameRect.left,
+		static_cast<UINT64>(frameRect.bottom) - frameRect.top
+	);
+	HRESULT hr = App::GetInstance().GetDeviceResources().GetD3DDevice()->CreateCommittedResource(
+		&heapDesc, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_COPY_SOURCE, nullptr, IID_PPV_ARGS(_output.put()));
 	if (FAILED(hr)) {
-		SPDLOG_LOGGER_CRITICAL(logger, MakeComErrorMsg("创建 Texture2D 失败", hr));
+		SPDLOG_LOGGER_CRITICAL(logger, MakeComErrorMsg("创建 2D 纹理失败", hr));
 		return false;
-	}*/
+	}
 
 	SPDLOG_LOGGER_INFO(logger, "DwmSharedSurfaceFrameSource 初始化完成");
 	return true;
 }
 
-FrameSourceBase::UpdateState DwmSharedSurfaceFrameSource::Update() {
+FrameSourceBase::UpdateState DwmSharedSurfaceFrameSource::CaptureFrame() {
+	_sharedTexture = nullptr;
+
 	HANDLE sharedTextureHandle = NULL;
 	if (!_dwmGetDxSharedSurface(App::GetInstance().GetHwndSrc(),
 		&sharedTextureHandle, nullptr, nullptr, nullptr, nullptr)
@@ -84,16 +85,36 @@ FrameSourceBase::UpdateState DwmSharedSurfaceFrameSource::Update() {
 		return UpdateState::Error;
 	}
 
-	/*ComPtr<ID3D11Texture2D> sharedTexture;
-	HRESULT hr = App::GetInstance().GetRenderer().GetD3DDevice()
-		->OpenSharedResource(sharedTextureHandle, IID_PPV_ARGS(&sharedTexture));
+	const DeviceResources& dr = App::GetInstance().GetDeviceResources();
+
+	HRESULT hr = dr.GetD3DDevice()->OpenSharedHandle(sharedTextureHandle, IID_PPV_ARGS(&_sharedTexture));
+
 	if (FAILED(hr)) {
-		SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("OpenSharedResource 失败", hr));
+		SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("OpenSharedHandle 失败", hr));
 		return UpdateState::Error;
 	}
+
+	auto commandList = dr.GetCommandList();
+
+	CD3DX12_RESOURCE_BARRIER barriers[] = {
+		CD3DX12_RESOURCE_BARRIER::Transition(
+			_sharedTexture.get(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_SOURCE, 0),
+		CD3DX12_RESOURCE_BARRIER::Transition(
+			_output.get(), D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_COPY_DEST, 0)
+	};
+	commandList->ResourceBarrier(std::size(barriers), barriers);
+
+	CD3DX12_TEXTURE_COPY_LOCATION src(_sharedTexture.get(), 0);
+	CD3DX12_TEXTURE_COPY_LOCATION dest(_output.get(), 0);
+	commandList->CopyTextureRegion(&dest, 0, 0, 0, &src, &_frameInWnd);
+
+	CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+			_output.get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_COPY_SOURCE, 0);
+	commandList->ResourceBarrier(1, &barrier);
 	
-	App::GetInstance().GetRenderer().GetD3DDC()
-		->CopySubresourceRegion(_output.Get(), 0, 0, 0, 0, sharedTexture.Get(), 0, &_frameInWnd);
-		*/
 	return UpdateState::NewFrame;
+}
+
+void DwmSharedSurfaceFrameSource::ReleaseFrame() {
+	_sharedTexture = nullptr;
 }

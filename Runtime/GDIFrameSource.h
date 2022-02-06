@@ -10,11 +10,13 @@ public:
 
 	bool Initialize() override;
 
-	ComPtr<ID3D11Texture2D> GetOutput() override {
-		return _output;
+	winrt::com_ptr<ID3D12Resource> GetOutput() override {
+		return nullptr;
 	}
 
-	UpdateState Update() override;
+	UpdateState CaptureFrame() override;
+
+	void ReleaseFrame() override {}
 
 	bool HasRoundCornerInWin11() override {
 		return false;

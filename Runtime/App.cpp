@@ -97,18 +97,17 @@ bool App::Run(
 		_OnQuit();
 		return false;
 	}
-	/*
-	_renderer.reset(new Renderer());
-	if (!_renderer->Initialize()) {
-		SPDLOG_LOGGER_CRITICAL(logger, "初始化 Renderer 失败");
-		Close();
+
+	_deviceResources.reset(new DeviceResources());
+	if (!_deviceResources->Initialize(D3D12_COMMAND_LIST_TYPE_DIRECT)) {
+		SPDLOG_LOGGER_CRITICAL(logger, "初始化 DeviceResources 失败");
+		Quit();
 		_Run();
 		return false;
 	}
 
-	_srcFrameRect = {};
-	
-	switch (captureMode) {
+	_frameSource.reset(new DwmSharedSurfaceFrameSource());
+	/*switch (captureMode) {
 	case 0:
 		_frameSource.reset(new GraphicsCaptureFrameSource());
 		break;
@@ -123,23 +122,24 @@ bool App::Run(
 		break;
 	default:
 		SPDLOG_LOGGER_CRITICAL(logger, "未知的捕获模式");
-		Close();
+		Quit();
 		_Run();
 		return false;
-	}
-	
+	}*/
+
 	if (!_frameSource->Initialize()) {
 		SPDLOG_LOGGER_CRITICAL(logger, "初始化 FrameSource 失败");
-		Close();
+		Quit();
 		_Run();
 		return false;
 	}
 
+	const RECT& srcFrameRect = _frameSource->GetSrcFrameRect();
 	SPDLOG_LOGGER_INFO(logger, fmt::format("源窗口尺寸：{}x{}",
-		_srcFrameRect.right - _srcFrameRect.left, _srcFrameRect.bottom - _srcFrameRect.top));
-	
+		srcFrameRect.right - srcFrameRect.left, srcFrameRect.bottom - srcFrameRect.top));
+
 	// 禁用窗口圆角
-	if (_frameSource->HasRoundCornerInWin11()) {
+	/*if (_frameSource->HasRoundCornerInWin11()) {
 		const auto& version = Utils::GetOSVersion();
 		bool isWin11 = Utils::CompareVersion(
 			version.dwMajorVersion, version.dwMinorVersion,
@@ -155,22 +155,7 @@ bool App::Run(
 				_roundCornerDisabled = true;
 			}
 		}
-	}
-
-	if (!_renderer->InitializeEffectsAndCursor(effectsJson)) {
-		SPDLOG_LOGGER_CRITICAL(logger, "初始化效果失败");
-		Close();
-		_Run();
-		return false;
 	}*/
-
-	_deviceResources.reset(new DeviceResources());
-	if (!_deviceResources->Initialize(D3D12_COMMAND_LIST_TYPE_DIRECT)) {
-		SPDLOG_LOGGER_CRITICAL(logger, "初始化 DeviceResources 失败");
-		Quit();
-		_Run();
-		return false;
-	}
 
 	_renderer.reset(new Renderer());
 	if (!_renderer->Initialize()) {

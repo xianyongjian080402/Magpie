@@ -202,7 +202,7 @@ bool DesktopDuplicationFrameSource::Initialize() {
 }
 
 
-FrameSourceBase::UpdateState DesktopDuplicationFrameSource::Update() {
+FrameSourceBase::UpdateState DesktopDuplicationFrameSource::CaptureFrame() {
 	/*UINT newFrameState = _newFrameState.load();
 	if (newFrameState == 2) {
 		// 第一帧之前不渲染

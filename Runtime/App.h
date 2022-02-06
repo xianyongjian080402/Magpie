@@ -98,7 +98,6 @@ private:
 	HWND _hwndDDF = NULL;
 
 	RECT _hostWndRect{};
-	RECT _srcFrameRect{};
 
 	UINT _captureMode = 0;
 	int _frameRate = 0;

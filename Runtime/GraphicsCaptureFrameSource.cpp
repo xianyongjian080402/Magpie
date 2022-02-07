@@ -24,7 +24,7 @@ bool GraphicsCaptureFrameSource::Initialize() {
 		return false;
 	}
 
-	HRESULT hr;
+	//HRESULT hr;
 	
 	winrt::impl::com_ref<IGraphicsCaptureItemInterop> interop;
 	try {

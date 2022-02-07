@@ -232,9 +232,7 @@ bool DeviceResources::Initialize(D3D12_COMMAND_LIST_TYPE commandListType) {
 }
 
 void DeviceResources::WaitForSwapChain() const {
-	if (_frameLatencyWaitableObject) {
-		WaitForSingleObject(_frameLatencyWaitableObject.get(), 1000);
-	}
+	WaitForSingleObject(_frameLatencyWaitableObject.get(), 1000);
 }
 
 bool DeviceResources::PrepareForCurrentFrame() {
@@ -357,8 +355,7 @@ bool DeviceResources::_CreateSwapChain() {
 	// 否则将不得不在每帧渲染前清空后缓冲区，这个操作在一些显卡上比较耗时
 	sd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
 	// 只要显卡支持始终启用 DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING
-	sd.Flags = (allowTearing ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0)
-		| (!App::GetInstance().IsDisableVSync() ? DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT : 0);
+	sd.Flags = (allowTearing ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0) | DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
 
 	winrt::com_ptr<IDXGISwapChain1> dxgiSwapChain = nullptr;
 	hr = _dxgiFactory->CreateSwapChainForHwnd(
@@ -379,15 +376,13 @@ bool DeviceResources::_CreateSwapChain() {
 		return false;
 	}
 
-	if (!App::GetInstance().IsDisableVSync()) {
-		// 关闭低延迟模式时将最大延迟设为 2 以使 CPU 和 GPU 并行执行
-		_swapChain->SetMaximumFrameLatency(App::GetInstance().IsDisableLowLatency() ? 2 : 1);
+	// 关闭低延迟模式时将最大延迟设为 2 以使 CPU 和 GPU 并行执行
+	_swapChain->SetMaximumFrameLatency(App::GetInstance().IsDisableLowLatency() ? 2 : 1);
 
-		_frameLatencyWaitableObject.reset(_swapChain->GetFrameLatencyWaitableObject());
-		if (!_frameLatencyWaitableObject) {
-			SPDLOG_LOGGER_ERROR(logger, "GetFrameLatencyWaitableObject 失败");
-			return false;
-		}
+	_frameLatencyWaitableObject.reset(_swapChain->GetFrameLatencyWaitableObject());
+	if (!_frameLatencyWaitableObject) {
+		SPDLOG_LOGGER_ERROR(logger, "GetFrameLatencyWaitableObject 失败");
+		return false;
 	}
 
 	hr = _dxgiFactory->MakeWindowAssociation(App::GetInstance().GetHwndHost(), DXGI_MWA_NO_ALT_ENTER);
@@ -431,7 +426,7 @@ bool DeviceResources::_CreateSwapChain() {
 
 	_backBuffers.resize(_backBufferCount);
 	for (UINT n = 0; n < _backBufferCount; n++) {
-		hr = _swapChain->GetBuffer(n, IID_PPV_ARGS(_backBuffers	[n].put()));
+		hr = _swapChain->GetBuffer(n, IID_PPV_ARGS(_backBuffers[n].put()));
 		if (FAILED(hr)) {
 			SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("GetBuffer 失败", hr));
 			return false;

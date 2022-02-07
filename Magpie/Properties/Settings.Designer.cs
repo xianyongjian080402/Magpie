@@ -418,5 +418,17 @@ namespace Magpie.Properties {
                 this["CustomCropping"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool DisableVSync {
+            get {
+                return ((bool)(this["DisableVSync"]));
+            }
+            set {
+                this["DisableVSync"] = value;
+            }
+        }
     }
 }

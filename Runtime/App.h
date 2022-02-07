@@ -25,7 +25,6 @@ public:
 		HWND hwndSrc,
 		const std::string& effectsJson,
 		UINT captureMode,
-		int frameRate,
 		float cursorZoomFactor,
 		UINT cursorInterpolationMode,
 		int adapterIdx,
@@ -100,7 +99,6 @@ private:
 	RECT _hostWndRect{};
 
 	UINT _captureMode = 0;
-	int _frameRate = 0;
 	float _cursorZoomFactor = 0;
 	UINT _cursorInterpolationMode = 0;
 	int _adapterIdx = 0;

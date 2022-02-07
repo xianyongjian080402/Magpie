@@ -102,7 +102,7 @@ FrameSourceBase::UpdateState DwmSharedSurfaceFrameSource::CaptureFrame() {
 		CD3DX12_RESOURCE_BARRIER::Transition(
 			_output.get(), D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_COPY_DEST, 0)
 	};
-	commandList->ResourceBarrier(std::size(barriers), barriers);
+	commandList->ResourceBarrier((UINT)std::size(barriers), barriers);
 
 	CD3DX12_TEXTURE_COPY_LOCATION src(_sharedTexture.get(), 0);
 	CD3DX12_TEXTURE_COPY_LOCATION dest(_output.get(), 0);

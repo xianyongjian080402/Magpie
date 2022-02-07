@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "GDIFrameSource.h"
 #include "App.h"
+#include "DeviceResources.h"
 
 
 extern std::shared_ptr<spdlog::logger> logger;
@@ -50,28 +51,50 @@ bool GDIFrameSource::Initialize() {
 		return false;
 	}
 
-	D3D11_TEXTURE2D_DESC desc{};
-	desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
-	desc.Width = _frameRect.right - _frameRect.left;
-	desc.Height = _frameRect.bottom - _frameRect.top;
-	desc.Usage = D3D11_USAGE_DEFAULT;
-	desc.MipLevels = 1;
-	desc.ArraySize = 1;
-	desc.SampleDesc.Count = 1;
-	desc.SampleDesc.Quality = 0;
-	desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
-	desc.MiscFlags = D3D11_RESOURCE_MISC_GDI_COMPATIBLE;
-	/*HRESULT hr = App::GetInstance().GetRenderer().GetD3DDevice()->CreateTexture2D(&desc, nullptr, &_output);
+	DeviceResources& dr = App::GetInstance().GetDeviceResources();
+	UINT d3d11DeviceFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
+#ifdef _DEBUG
+	d3d11DeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
+#endif // _DEBUG
+
+	IUnknown* commandQueue = dr.GetCommandQueue().get();
+	D3D11On12CreateDevice(dr.GetD3DDevice().get(), d3d11DeviceFlags, nullptr, 0, 
+		&commandQueue, 1, 0, _d3d11Device.put(), _d3d11DC.put(), nullptr);
+
+	_d3d11Device.try_as(_d3d11On12Device);
+
+	CD3DX12_HEAP_PROPERTIES heapDesc(D3D12_HEAP_TYPE_DEFAULT);
+	auto desc = CD3DX12_RESOURCE_DESC::Tex2D(
+		DXGI_FORMAT_B8G8R8A8_UNORM,
+		static_cast<UINT64>(_frameRect.right) - _frameRect.left,
+		static_cast<UINT64>(_frameRect.bottom) - _frameRect.top,
+		1,
+		1
+	);
+	HRESULT hr = App::GetInstance().GetDeviceResources().GetD3DDevice()->CreateCommittedResource(
+		&heapDesc, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_COPY_SOURCE, nullptr, IID_PPV_ARGS(_output.put()));
+
+	D3D11_TEXTURE2D_DESC desc1{};
+	desc1.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+	desc1.Width = _frameRect.right - _frameRect.left;
+	desc1.Height = _frameRect.bottom - _frameRect.top;
+	desc1.Usage = D3D11_USAGE_DEFAULT;
+	desc1.MipLevels = 1;
+	desc1.ArraySize = 1;
+	desc1.SampleDesc.Count = 1;
+	desc1.SampleDesc.Quality = 0;
+	desc1.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
+	desc1.MiscFlags = D3D11_RESOURCE_MISC_GDI_COMPATIBLE;
+	hr = _d3d11Device->CreateTexture2D(&desc1, nullptr, _d3d11Tex.put());
 	if (FAILED(hr)) {
 		SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("创建 Texture2D 失败", hr));
 		return false;
 	}
 
-	hr = _output.As(&_dxgiSurface);
-	if (FAILED(hr)) {
-		SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("从 Texture2D 获取 IDXGISurface1 失败", hr));
-		return false;
-	}*/
+	_d3d11Tex.try_as(_dxgiSurface);
+
+	D3D11_RESOURCE_FLAGS flags{};
+	hr = _d3d11On12Device->CreateWrappedResource(_output.get(), &flags, D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_COPY_SOURCE, IID_PPV_ARGS(_wrappedOutput.put()));
 
 	SPDLOG_LOGGER_INFO(logger, "GDIFrameSource 初始化完成");
 	return true;
@@ -79,6 +102,9 @@ bool GDIFrameSource::Initialize() {
 
 FrameSourceBase::UpdateState GDIFrameSource::CaptureFrame() {
 	HWND hwndSrc = App::GetInstance().GetHwndSrc();
+
+	ID3D11Resource* res = _wrappedOutput.get();
+	_d3d11On12Device->AcquireWrappedResources(&res, 1);
 
 	HDC hdcDest;
 	HRESULT hr = _dxgiSurface->GetDC(TRUE, &hdcDest);
@@ -102,6 +128,12 @@ FrameSourceBase::UpdateState GDIFrameSource::CaptureFrame() {
 
 	ReleaseDC(hwndSrc, hdcSrc);
 	_dxgiSurface->ReleaseDC(nullptr);
+
+	_d3d11DC->CopyResource(_wrappedOutput.get(), _d3d11Tex.get());
+	
+	_d3d11On12Device->ReleaseWrappedResources(&res, 1);
+
+	_d3d11DC->Flush();
 
 	return UpdateState::NewFrame;
 }

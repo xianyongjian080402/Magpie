@@ -11,7 +11,7 @@ public:
 	bool Initialize() override;
 
 	winrt::com_ptr<ID3D12Resource> GetOutput() override {
-		return nullptr;
+		return _output;
 	}
 
 	UpdateState CaptureFrame() override;
@@ -28,6 +28,14 @@ public:
 
 private:
 	RECT _frameRect{};
-	ComPtr<IDXGISurface1> _dxgiSurface;
-	ComPtr<ID3D11Texture2D> _output;
+
+	winrt::com_ptr<ID3D11Texture2D> _d3d11Tex;
+	winrt::com_ptr<IDXGISurface1> _dxgiSurface;
+
+	winrt::com_ptr<ID3D12Resource> _output;
+	winrt::com_ptr<ID3D11Resource> _wrappedOutput;
+
+	winrt::com_ptr<ID3D11Device> _d3d11Device;
+	winrt::com_ptr<ID3D11On12Device> _d3d11On12Device;
+	winrt::com_ptr<ID3D11DeviceContext> _d3d11DC;
 };

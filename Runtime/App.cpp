@@ -104,8 +104,7 @@ bool App::Run(
 		return false;
 	}
 
-	_frameSource.reset(new DwmSharedSurfaceFrameSource());
-	/*switch (captureMode) {
+	switch (captureMode) {
 	case 0:
 		_frameSource.reset(new GraphicsCaptureFrameSource());
 		break;
@@ -123,7 +122,7 @@ bool App::Run(
 		Quit();
 		_Run();
 		return false;
-	}*/
+	}
 
 	if (!_frameSource->Initialize()) {
 		SPDLOG_LOGGER_CRITICAL(logger, "初始化 FrameSource 失败");

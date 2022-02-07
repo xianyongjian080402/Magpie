@@ -60,7 +60,9 @@ bool DwmSharedSurfaceFrameSource::Initialize() {
 	auto desc = CD3DX12_RESOURCE_DESC::Tex2D(
 		DXGI_FORMAT_B8G8R8A8_UNORM,
 		static_cast<UINT64>(frameRect.right) - frameRect.left,
-		static_cast<UINT64>(frameRect.bottom) - frameRect.top
+		static_cast<UINT64>(frameRect.bottom) - frameRect.top,
+		1,
+		0
 	);
 	HRESULT hr = App::GetInstance().GetDeviceResources().GetD3DDevice()->CreateCommittedResource(
 		&heapDesc, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_COPY_SOURCE, nullptr, IID_PPV_ARGS(_output.put()));
@@ -88,6 +90,8 @@ FrameSourceBase::UpdateState DwmSharedSurfaceFrameSource::CaptureFrame() {
 	const DeviceResources& dr = App::GetInstance().GetDeviceResources();
 
 	HRESULT hr = dr.GetD3DDevice()->OpenSharedHandle(sharedTextureHandle, IID_PPV_ARGS(&_sharedTexture));
+
+	D3D12_RESOURCE_DESC desc = _sharedTexture->GetDesc();
 
 	if (FAILED(hr)) {
 		SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("OpenSharedHandle 失败", hr));

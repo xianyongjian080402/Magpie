@@ -52,8 +52,8 @@ void FrameStatistics::Tick() {
         m_framesThisSecond = 0;
         m_qpcSecondCounter %= static_cast<uint64_t>(m_qpcFrequency.QuadPart);
 
-#ifdef _DEBUG
+//#ifdef _DEBUG
         OutputDebugString(fmt::format(L"{} FPS\n", m_framesPerSecond).c_str());
-#endif // _DEBUG
+//#endif // _DEBUG
     }
 }

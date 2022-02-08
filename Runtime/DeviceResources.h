@@ -17,6 +17,7 @@ public:
     winrt::com_ptr<ID3D12Device> GetD3DDevice() const noexcept {return _d3dDevice;}
     winrt::com_ptr<IDXGISwapChain3> GetSwapChain() const noexcept { return _swapChain; }
     winrt::com_ptr<IDXGIFactory4> GetDXGIFactory() const noexcept { return _dxgiFactory; }
+    winrt::com_ptr<IDXGIAdapter1> GetGraphicsAdapter() const noexcept { return _graphicsAdapter; }
     D3D_FEATURE_LEVEL GetDeviceFeatureLevel() const noexcept { return _d3dFeatureLevel; }
     UINT GetBackBufferCount() const noexcept { return _backBufferCount; }
     const std::vector<winrt::com_ptr<ID3D12Resource>>& GetBackBuffers() const noexcept { return _backBuffers; }
@@ -46,6 +47,7 @@ private:
     winrt::com_ptr<IDXGIFactory4> _dxgiFactory;
     winrt::com_ptr<ID3D12Device> _d3dDevice;
     D3D_FEATURE_LEVEL _d3dFeatureLevel{};
+    winrt::com_ptr<IDXGIAdapter1> _graphicsAdapter;
 
     winrt::com_ptr<IDXGISwapChain3> _swapChain;
     Utils::ScopedHandle _frameLatencyWaitableObject;

@@ -49,8 +49,15 @@ bool Renderer::_PopulateCommandList() {
 
 	CD3DX12_TEXTURE_COPY_LOCATION src(frame.get(), 0);
 	CD3DX12_TEXTURE_COPY_LOCATION dest(backBuffer.get(), 0);
-	CD3DX12_BOX box(0, 0, frameSize.cx, frameSize.cy);
-	commandList->CopyTextureRegion(&dest, (backBufferSize.cx - frameSize.cx) / 2, (backBufferSize.cy - frameSize.cy) / 2, 0, &src, &box);
+	CD3DX12_BOX box(0, 0, std::min(backBufferSize.cx, frameSize.cx), std::min(backBufferSize.cy, frameSize.cy));
+	commandList->CopyTextureRegion(
+		&dest,
+		std::max(0L, (backBufferSize.cx - frameSize.cx) / 2),
+		std::max(0L, (backBufferSize.cy - frameSize.cy) / 2),
+		0,
+		&src,
+		&box
+	);
 
 	return true;
 }

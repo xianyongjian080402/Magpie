@@ -124,19 +124,19 @@ bool DeviceResources::Initialize(D3D12_COMMAND_LIST_TYPE commandListType) {
 		return false;
 	}
 
-	winrt::com_ptr<IDXGIAdapter1> adapter = ObtainGraphicsAdapter(_dxgiFactory, app.GetAdapterIdx());
-	if (!adapter) {
+	_graphicsAdapter = ObtainGraphicsAdapter(_dxgiFactory, app.GetAdapterIdx());
+	if (!_graphicsAdapter) {
 		SPDLOG_LOGGER_ERROR(logger, "没有可用的图形适配器");
 		return false;
 	}
 
 	// 创建 D3D12 设备
-	hr = D3D12CreateDevice(adapter.get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(_d3dDevice.put()));
+	hr = D3D12CreateDevice(_graphicsAdapter.get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(_d3dDevice.put()));
 	if (FAILED(hr)) {
 		SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("创建 D3D12 设备失败", hr));
 		return false;
 	}
-
+	
 	// 获取功能级别
 	{
 		D3D_FEATURE_LEVEL requestedLevels[] = {

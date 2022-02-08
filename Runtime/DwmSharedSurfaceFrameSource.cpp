@@ -62,7 +62,7 @@ bool DwmSharedSurfaceFrameSource::Initialize() {
 		static_cast<UINT64>(frameRect.right) - frameRect.left,
 		static_cast<UINT64>(frameRect.bottom) - frameRect.top,
 		1,
-		0
+		1
 	);
 	HRESULT hr = App::GetInstance().GetDeviceResources().GetD3DDevice()->CreateCommittedResource(
 		&heapDesc, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_COPY_SOURCE, nullptr, IID_PPV_ARGS(_output.put()));

@@ -38,7 +38,6 @@
 #include <windows.h>
 #include <windowsx.h>
 #include <magnification.h>
-#include <wrl/client.h>
 #include <dwmapi.h>
 #include <profileapi.h>
 #include <psapi.h>

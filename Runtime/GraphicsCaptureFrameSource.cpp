@@ -5,6 +5,7 @@
 #include <Windows.Graphics.DirectX.Direct3D11.interop.h>
 #include <winrt/Windows.Foundation.Metadata.h>
 #include "Utils.h"
+#include "DeviceResources.h"
 
 
 namespace winrt {
@@ -37,14 +38,52 @@ bool GraphicsCaptureFrameSource::Initialize() {
 			return false;
 		}
 
-		/*hr = CreateDirect3D11DeviceFromDXGIDevice(
-			App::GetInstance().GetRenderer().GetDXGIDevice().Get(),
+		UINT createDeviceFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
+#ifdef _DEBUG
+		// 在 DEBUG 配置启用调试层
+		createDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
+#endif
+
+		D3D_FEATURE_LEVEL featureLevels[] = {
+			D3D_FEATURE_LEVEL_11_1,
+			D3D_FEATURE_LEVEL_11_0
+		};
+		UINT nFeatureLevels = ARRAYSIZE(featureLevels);
+
+		// 使用和 Renderer 相同的图像适配器以避免 GPU 间的纹理拷贝
+		winrt::com_ptr<ID3D11Device> device;
+		winrt::com_ptr<ID3D11DeviceContext> dc;
+		HRESULT hr = D3D11CreateDevice(
+			App::GetInstance().GetDeviceResources().GetGraphicsAdapter().get(),
+			D3D_DRIVER_TYPE_UNKNOWN,
+			nullptr,
+			createDeviceFlags,
+			featureLevels,
+			nFeatureLevels,
+			D3D11_SDK_VERSION,
+			device.put(),
+			nullptr,
+			dc.put()
+		);
+
+		if (FAILED(hr)) {
+			SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("D3D11CreateDevice 失败", hr));
+			return false;
+		}
+
+		device.try_as(_wgcD3dDevice);
+		dc.try_as(_wgcD3dDC);
+
+		winrt::com_ptr<IDXGIDevice> dxgiDevice = device.try_as<IDXGIDevice>();
+
+		hr = CreateDirect3D11DeviceFromDXGIDevice(
+			dxgiDevice.get(),
 			reinterpret_cast<::IInspectable**>(winrt::put_abi(_wrappedD3DDevice))
 		);
 		if (FAILED(hr)) {
 			SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("创建 IDirect3DDevice 失败", hr));
 			return false;
-		}*/
+		}
 
 		// 从窗口句柄获取 GraphicsCaptureItem
 		interop = winrt::get_activation_factory<winrt::GraphicsCaptureItem, IGraphicsCaptureItemInterop>();
@@ -75,6 +114,38 @@ bool GraphicsCaptureFrameSource::Initialize() {
 			}
 		}
 	}
+
+	auto d3dDevice = App::GetInstance().GetDeviceResources().GetD3DDevice();
+
+	CD3DX12_HEAP_PROPERTIES heapDesc(D3D12_HEAP_TYPE_DEFAULT);
+	auto desc = CD3DX12_RESOURCE_DESC::Tex2D(
+		DXGI_FORMAT_B8G8R8A8_UNORM,
+		static_cast<UINT64>(_srcFrameRect.right) - _srcFrameRect.left,
+		static_cast<UINT64>(_srcFrameRect.bottom) - _srcFrameRect.top,
+		1,
+		1,
+		1,
+		0,
+		D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS
+	);
+	HRESULT hr = d3dDevice->CreateCommittedResource(&heapDesc, D3D12_HEAP_FLAG_SHARED,
+		&desc, D3D12_RESOURCE_STATE_COPY_SOURCE, nullptr, IID_PPV_ARGS(_sharedTex.put()));
+
+	desc.Flags = D3D12_RESOURCE_FLAG_NONE;
+	hr = d3dDevice->CreateCommittedResource(&heapDesc, D3D12_HEAP_FLAG_NONE, &desc,
+		D3D12_RESOURCE_STATE_COPY_SOURCE, nullptr, IID_PPV_ARGS(_output.put()));
+
+	d3dDevice->CreateFence(0, D3D12_FENCE_FLAG_SHARED, IID_PPV_ARGS(_fence.put()));
+
+	HANDLE hShared = NULL;
+	d3dDevice->CreateSharedHandle(_sharedTex.get(), nullptr, GENERIC_ALL, nullptr, &hShared);
+	_wgcD3dDevice->OpenSharedResource1(hShared, IID_PPV_ARGS(_wgcSharedTex.put()));
+
+	d3dDevice->CreateSharedHandle(_fence.get(), nullptr, GENERIC_ALL, nullptr, &hShared);
+	_wgcD3dDevice->OpenSharedFence(hShared, IID_PPV_ARGS(_wgcFence.put()));
+
+	InitializeConditionVariable(&_cv);
+	InitializeCriticalSection(&_cs);
 
 	try {
 		// 创建帧缓冲池
@@ -128,70 +199,44 @@ bool GraphicsCaptureFrameSource::Initialize() {
 		return false;
 	}
 
-	D3D11_TEXTURE2D_DESC desc{};
-	desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
-	desc.Width = _frameBox.right - _frameBox.left;
-	desc.Height = _frameBox.bottom - _frameBox.top;
-	desc.MipLevels = 1;
-	desc.ArraySize = 1;
-	desc.SampleDesc.Count = 1;
-	desc.SampleDesc.Quality = 0;
-	desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
-	/*hr = App::GetInstance().GetRenderer().GetD3DDevice()->CreateTexture2D(&desc, nullptr, &_output);
-	if (FAILED(hr)) {
-		SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("创建 Texture2D 失败", hr));
-		return false;
-	}*/
-
-	InitializeConditionVariable(&_cv);
-	InitializeCriticalSection(&_cs);
-
 	App::GetInstance().SetErrorMsg(ErrorMessages::GENERIC);
 	SPDLOG_LOGGER_INFO(logger, "GraphicsCaptureFrameSource 初始化完成");
 	return true;
 }
 
 FrameSourceBase::UpdateState GraphicsCaptureFrameSource::CaptureFrame() {
+	UINT64 wgcFenceValue = _wgcFenceValue.load();
+
 	// 每次睡眠 1 毫秒等待新帧到达，防止 CPU 占用过高
 	EnterCriticalSection(&_cs);
 
-	if (!_newFrameArrived) {
+	if (wgcFenceValue == _fenceValue) {
 		SleepConditionVariableCS(&_cv, &_cs, 1);
 	}
 
 	LeaveCriticalSection(&_cs);
 
-	if (_newFrameArrived) {
-		_newFrameArrived = false;
-
-		winrt::Direct3D11CaptureFrame frame = _captureFramePool.TryGetNextFrame();
-		if (!frame) {
-			// 缓冲池没有帧，不应发生此情况
-			assert(false);
-			return UpdateState::Waiting;
-		}
-
-		// 从帧获取 IDXGISurface
-		winrt::IDirect3DSurface d3dSurface = frame.Surface();
-
-		winrt::com_ptr<::Windows::Graphics::DirectX::Direct3D11::IDirect3DDxgiInterfaceAccess> dxgiInterfaceAccess(
-			d3dSurface.as<::Windows::Graphics::DirectX::Direct3D11::IDirect3DDxgiInterfaceAccess>()
-		);
-
-		ComPtr<ID3D11Texture2D> withFrame;
-		HRESULT hr = dxgiInterfaceAccess->GetInterface(IID_PPV_ARGS(&withFrame));
-		if (FAILED(hr)) {
-			SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("从获取 IDirect3DSurface 获取 ID3D11Texture2D 失败", hr));
-			return UpdateState::Error;
-		}
-
-		/*App::GetInstance().GetRenderer().GetD3DDC()
-			->CopySubresourceRegion(_output.Get(), 0, 0, 0, 0, withFrame.Get(), 0, &_frameBox);*/
-
-		return UpdateState::NewFrame;
-	} else {
+	wgcFenceValue = _wgcFenceValue.load();
+	if (wgcFenceValue == _fenceValue) {
 		return UpdateState::Waiting;
 	}
+
+	_fenceValue = wgcFenceValue;
+
+	DeviceResources& dr = App::GetInstance().GetDeviceResources();
+	dr.GetCommandQueue()->Wait(_fence.get(), wgcFenceValue);
+
+	auto commandList = dr.GetCommandList();
+
+	CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+			_output.get(), D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_COPY_DEST, 0);
+	commandList->ResourceBarrier(1, &barrier);
+	dr.GetCommandList()->CopyResource(_output.get(), _sharedTex.get());
+	barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+			_output.get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_COPY_SOURCE, 0);
+	commandList->ResourceBarrier(1, &barrier);
+	
+	return UpdateState::NewFrame;
 }
 
 bool GraphicsCaptureFrameSource::_CaptureFromWindow(winrt::impl::com_ref<IGraphicsCaptureItemInterop> interop) {
@@ -340,10 +385,33 @@ bool GraphicsCaptureFrameSource::_CaptureFromMonitor(winrt::impl::com_ref<IGraph
 }
 
 void GraphicsCaptureFrameSource::_OnFrameArrived(winrt::Direct3D11CaptureFramePool const&, winrt::IInspectable const&) {
+	winrt::Direct3D11CaptureFrame frame = _captureFramePool.TryGetNextFrame();
+	if (!frame) {
+		// 缓冲池没有帧，不应发生此情况
+		assert(false);
+		return;
+	}
+
+	// 从帧获取 IDXGISurface
+	winrt::IDirect3DSurface d3dSurface = frame.Surface();
+
+	winrt::com_ptr<::Windows::Graphics::DirectX::Direct3D11::IDirect3DDxgiInterfaceAccess> dxgiInterfaceAccess(
+		d3dSurface.as<::Windows::Graphics::DirectX::Direct3D11::IDirect3DDxgiInterfaceAccess>()
+	);
+
+	winrt::com_ptr<ID3D11Texture2D> withFrame;
+	HRESULT hr = dxgiInterfaceAccess->GetInterface(IID_PPV_ARGS(withFrame.put()));
+	if (FAILED(hr)) {
+		SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("从获取 IDirect3DSurface 获取 ID3D11Texture2D 失败", hr));
+		return;
+	}
+
 	// 更改标志，如果主线程正在等待，唤醒主线程
-	EnterCriticalSection(&_cs);
-	_newFrameArrived = true;
-	LeaveCriticalSection(&_cs);
+	UINT64 fenceValue = ++_wgcFenceValue;
+
+	_wgcD3dDC->CopySubresourceRegion(_wgcSharedTex.get(), 0, 0, 0, 0, withFrame.get(), 0, &_frameBox);
+	_wgcD3dDC->Signal(_wgcFence.get(), fenceValue);
+	_wgcD3dDC->Flush();
 
 	WakeConditionVariable(&_cv);
 }

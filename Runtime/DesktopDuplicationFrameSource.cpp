@@ -119,7 +119,7 @@ bool DesktopDuplicationFrameSource::Initialize() {
 		D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS
 	);
 	HRESULT hr = d3dDevice->CreateCommittedResource(&heapDesc, D3D12_HEAP_FLAG_SHARED,
-		&desc, D3D12_RESOURCE_STATE_COPY_SOURCE, nullptr, IID_PPV_ARGS(_sharedTex.put()));
+		&desc, D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(_sharedTex.put()));
 
 	desc.Flags = D3D12_RESOURCE_FLAG_NONE;
 	hr = d3dDevice->CreateCommittedResource(&heapDesc, D3D12_HEAP_FLAG_NONE, &desc,
@@ -198,7 +198,7 @@ FrameSourceBase::UpdateState DesktopDuplicationFrameSource::CaptureFrame() {
 	_fenceValue = ddpFenceValue;
 
 	DeviceResources& dr = App::GetInstance().GetDeviceResources();
-	dr.GetCommandQueue()->Wait(_fence.get(), _fenceValue);
+	dr.GetCommandQueue()->Wait(_fence.get(), ddpFenceValue);
 
 	auto commandList = dr.GetCommandList();
 
@@ -332,9 +332,9 @@ DWORD WINAPI DesktopDuplicationFrameSource::_DDPThreadProc(LPVOID lpThreadParame
 			continue;
 		}
 
+		UINT64 fenceValue = ++that._ddpFenceValue;
 		that._ddpD3dDC->CopySubresourceRegion(that._ddpSharedTex.get(), 0, 0, 0, 0, d3dRes.get(), 0, &that._frameInMonitor);
-
-		that._ddpD3dDC->Signal(that._ddpFence.get(), ++that._ddpFenceValue);
+		that._ddpD3dDC->Signal(that._ddpFence.get(), fenceValue);
 		that._ddpD3dDC->Flush();
 	}
 

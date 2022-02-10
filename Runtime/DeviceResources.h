@@ -27,6 +27,8 @@ public:
     winrt::com_ptr<ID3D12CommandAllocator> GetCommandAllocator() const noexcept { return _commandAllocators[_backBufferIndex]; }
     winrt::com_ptr<ID3D12GraphicsCommandList> GetCommandList() const noexcept { return _commandList; }
 
+    void SafeReleaseFrameResource(winrt::com_ptr<IUnknown> resource);
+
     const FrameStatistics& GetFrameStatics() const noexcept { return _frameStatistics; }
 
     void BeginFrame();
@@ -52,6 +54,8 @@ private:
     std::vector<winrt::com_ptr<ID3D12CommandAllocator>> _commandAllocators;
     winrt::com_ptr<ID3D12CommandQueue> _commandQueue;
     winrt::com_ptr<ID3D12GraphicsCommandList> _commandList;
+
+    std::vector<std::vector<winrt::com_ptr<IUnknown>>> _frameResources;
 
     // Synchronization objects.
     UINT _backBufferIndex = 0;

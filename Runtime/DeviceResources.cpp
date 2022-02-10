@@ -215,7 +215,7 @@ bool DeviceResources::Initialize(D3D12_COMMAND_LIST_TYPE commandListType) {
 	// 创建同步对象
 	{
 		_fenceValues.resize(frameCount);
-		hr = _d3dDevice->CreateFence(_fenceValues[_curFrameIndex], D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(_fence.put()));
+		hr = _d3dDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(_fence.put()));
 		if (FAILED(hr)) {
 			SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("CreateFence 失败", hr));
 			return false;
@@ -228,16 +228,23 @@ bool DeviceResources::Initialize(D3D12_COMMAND_LIST_TYPE commandListType) {
 		}
 	}
 
+	_frameResources.resize(frameCount);
+
 	return true;
 }
 
+void DeviceResources::SafeReleaseFrameResource(winrt::com_ptr<IUnknown> resource) {
+	_frameResources[_curFrameIndex].push_back(std::move(resource));
+}
+
 void DeviceResources::BeginFrame() {
+	// 等待此帧缓冲区
+	_WaitForFence(_fenceValues[_curFrameIndex]);
+	_frameResources[_curFrameIndex].clear();
+
 	WaitForSingleObject(_frameLatencyWaitableObject.get(), 1000);
 
 	_backBufferIndex = _swapChain->GetCurrentBackBufferIndex();
-
-	// 等待此帧缓冲区
-	_WaitForFence(_fenceValues[_curFrameIndex]);
 
 	if (_firstFrame) {
 		_firstFrame = false;

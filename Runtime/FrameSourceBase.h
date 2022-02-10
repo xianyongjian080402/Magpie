@@ -25,8 +25,6 @@ public:
 
 	virtual UpdateState CaptureFrame() = 0;
 
-	virtual void ReleaseFrame() = 0;
-
 	virtual bool HasRoundCornerInWin11() = 0;
 
 	virtual bool IsScreenCapture() = 0;

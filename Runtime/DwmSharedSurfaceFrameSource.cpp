@@ -76,8 +76,6 @@ bool DwmSharedSurfaceFrameSource::Initialize() {
 }
 
 FrameSourceBase::UpdateState DwmSharedSurfaceFrameSource::CaptureFrame() {
-	_sharedTexture = nullptr;
-
 	HANDLE sharedTextureHandle = NULL;
 	if (!_dwmGetDxSharedSurface(App::GetInstance().GetHwndSrc(),
 		&sharedTextureHandle, nullptr, nullptr, nullptr, nullptr)
@@ -87,11 +85,14 @@ FrameSourceBase::UpdateState DwmSharedSurfaceFrameSource::CaptureFrame() {
 		return UpdateState::Error;
 	}
 
-	const DeviceResources& dr = App::GetInstance().GetDeviceResources();
+	DeviceResources& dr = App::GetInstance().GetDeviceResources();
 
-	HRESULT hr = dr.GetD3DDevice()->OpenSharedHandle(sharedTextureHandle, IID_PPV_ARGS(&_sharedTexture));
+	winrt::com_ptr<ID3D12Resource> sharedTexture;
+	HRESULT hr = dr.GetD3DDevice()->OpenSharedHandle(sharedTextureHandle, IID_PPV_ARGS(sharedTexture.put()));
 
-	D3D12_RESOURCE_DESC desc = _sharedTexture->GetDesc();
+	dr.SafeReleaseFrameResource(sharedTexture);
+
+	D3D12_RESOURCE_DESC desc = sharedTexture->GetDesc();
 
 	if (FAILED(hr)) {
 		SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("OpenSharedHandle 失败", hr));
@@ -102,13 +103,13 @@ FrameSourceBase::UpdateState DwmSharedSurfaceFrameSource::CaptureFrame() {
 
 	CD3DX12_RESOURCE_BARRIER barriers[] = {
 		CD3DX12_RESOURCE_BARRIER::Transition(
-			_sharedTexture.get(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_SOURCE, 0),
+			sharedTexture.get(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_SOURCE, 0),
 		CD3DX12_RESOURCE_BARRIER::Transition(
 			_output.get(), D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_COPY_DEST, 0)
 	};
 	commandList->ResourceBarrier((UINT)std::size(barriers), barriers);
 
-	CD3DX12_TEXTURE_COPY_LOCATION src(_sharedTexture.get(), 0);
+	CD3DX12_TEXTURE_COPY_LOCATION src(sharedTexture.get(), 0);
 	CD3DX12_TEXTURE_COPY_LOCATION dest(_output.get(), 0);
 	commandList->CopyTextureRegion(&dest, 0, 0, 0, &src, &_frameInWnd);
 
@@ -117,8 +118,4 @@ FrameSourceBase::UpdateState DwmSharedSurfaceFrameSource::CaptureFrame() {
 	commandList->ResourceBarrier(1, &barrier);
 	
 	return UpdateState::NewFrame;
-}
-
-void DwmSharedSurfaceFrameSource::ReleaseFrame() {
-	_sharedTexture = nullptr;
 }

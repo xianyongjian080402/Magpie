@@ -16,8 +16,6 @@ public:
 
 	UpdateState CaptureFrame() override;
 
-	void ReleaseFrame() override;
-
 	bool HasRoundCornerInWin11() override {
 		return false;
 	}
@@ -38,7 +36,6 @@ private:
 	_DwmGetDxSharedSurfaceFunc *_dwmGetDxSharedSurface = nullptr;
 
 	D3D12_BOX _frameInWnd{};
-	winrt::com_ptr<ID3D12Resource> _sharedTexture;
 	winrt::com_ptr<ID3D12Resource> _output;
 };
 

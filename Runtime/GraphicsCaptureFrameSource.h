@@ -29,8 +29,6 @@ public:
 
 	UpdateState CaptureFrame() override;
 
-	void ReleaseFrame() override {}
-
 	bool HasRoundCornerInWin11() override {
 		return true;
 	}

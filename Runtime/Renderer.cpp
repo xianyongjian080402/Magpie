@@ -18,14 +18,13 @@ void Renderer::Render() {
 	DeviceResources& dr = App::GetInstance().GetDeviceResources();
 
 	if (!_waitingForNextFrame) {
-		dr.WaitForSwapChain();
+		dr.BeginFrame();
 	}
 
-	dr.PrepareForCurrentFrame();
 	App::GetInstance().GetFrameSource().CaptureFrame();
 
 	_PopulateCommandList();
-	dr.Present(D3D12_RESOURCE_STATE_COPY_DEST);
+	dr.EndFrame(D3D12_RESOURCE_STATE_COPY_DEST);
 }
 
 bool Renderer::_PopulateCommandList() {

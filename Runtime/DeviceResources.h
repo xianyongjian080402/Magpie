@@ -29,20 +29,16 @@ public:
 
     const FrameStatistics& GetFrameStatics() const noexcept { return _frameStatistics; }
 
-    void WaitForSwapChain() const;
+    void BeginFrame();
 
-    bool PrepareForCurrentFrame();
-
-    bool Present(D3D12_RESOURCE_STATES currentBackBufferState);
+    void EndFrame(D3D12_RESOURCE_STATES currentBackBufferState);
 
     bool WaitForGPU();
 
 private:
     bool _CreateSwapChain();
 
-    bool _MoveToNextFrame();
-
-	static constexpr size_t _MAX_BACK_BUFFER_COUNT = 3;
+    void _WaitForFence(UINT64 waitValue);
 
     winrt::com_ptr<IDXGIFactory4> _dxgiFactory;
     winrt::com_ptr<ID3D12Device> _d3dDevice;
@@ -63,6 +59,9 @@ private:
     Utils::ScopedHandle _fenceEvent;
     winrt::com_ptr<ID3D12Fence> _fence;
     std::vector<UINT64> _fenceValues;
+    UINT64 _nextFenceValue = 1;
+
+    UINT _curFrameIndex = 0;
 
     FrameStatistics _frameStatistics;
 

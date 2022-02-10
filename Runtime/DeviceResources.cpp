@@ -192,9 +192,11 @@ bool DeviceResources::Initialize(D3D12_COMMAND_LIST_TYPE commandListType) {
 		return false;
 	}
 
+	UINT frameCount = App::GetInstance().IsDisableLowLatency() ? 2 : 1;
+
 	// 创建命令分配器
-	_commandAllocators.resize(_backBufferCount);
-	for (UINT i = 0; i < _backBufferCount; ++i) {
+	_commandAllocators.resize(frameCount);
+	for (UINT i = 0; i < frameCount; ++i) {
 		hr = _d3dDevice->CreateCommandAllocator(commandListType, IID_PPV_ARGS(_commandAllocators[i].put()));
 		if (FAILED(hr)) {
 			SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("创建命令分配器失败", hr));
@@ -203,7 +205,7 @@ bool DeviceResources::Initialize(D3D12_COMMAND_LIST_TYPE commandListType) {
 	}
 
 	// 创建命令列表
-	hr = _d3dDevice->CreateCommandList(0, commandListType, _commandAllocators[_backBufferIndex].get(),
+	hr = _d3dDevice->CreateCommandList(0, commandListType, _commandAllocators[_curFrameIndex].get(),
 		nullptr, IID_PPV_ARGS(_commandList.put()));
 	if (FAILED(hr)) {
 		SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("创建命令列表失败", hr));
@@ -212,14 +214,12 @@ bool DeviceResources::Initialize(D3D12_COMMAND_LIST_TYPE commandListType) {
 
 	// 创建同步对象
 	{
-		_fenceValues.resize(_backBufferCount);
-		hr = _d3dDevice->CreateFence(_fenceValues[_backBufferIndex], D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(_fence.put()));
+		_fenceValues.resize(frameCount);
+		hr = _d3dDevice->CreateFence(_fenceValues[_curFrameIndex], D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(_fence.put()));
 		if (FAILED(hr)) {
 			SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("CreateFence 失败", hr));
 			return false;
 		}
-
-		++_fenceValues[_backBufferIndex];
 
 		_fenceEvent.reset(CreateEvent(nullptr, FALSE, FALSE, nullptr));
 		if (!_fenceEvent) {
@@ -231,32 +231,33 @@ bool DeviceResources::Initialize(D3D12_COMMAND_LIST_TYPE commandListType) {
 	return true;
 }
 
-void DeviceResources::WaitForSwapChain() const {
+void DeviceResources::BeginFrame() {
 	WaitForSingleObject(_frameLatencyWaitableObject.get(), 1000);
-}
 
-bool DeviceResources::PrepareForCurrentFrame() {
+	_backBufferIndex = _swapChain->GetCurrentBackBufferIndex();
+
+	// 等待此帧缓冲区
+	_WaitForFence(_fenceValues[_curFrameIndex]);
+
 	if (_firstFrame) {
 		_firstFrame = false;
-		return true;
+		return;
 	}
 
-	HRESULT hr = _commandAllocators[_backBufferIndex]->Reset();
+	HRESULT hr = _commandAllocators[_curFrameIndex]->Reset();
 	if (FAILED(hr)) {
 		SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("重置命令分配器失败", hr));
-		return false;
+		return;
 	}
 
-	hr = _commandList->Reset(_commandAllocators[_backBufferIndex].get(), nullptr);
+	hr = _commandList->Reset(_commandAllocators[_curFrameIndex].get(), nullptr);
 	if (FAILED(hr)) {
 		SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("重置命令列表失败", hr));
-		return false;
+		return;
 	}
-
-	return true;
 }
 
-bool DeviceResources::Present(D3D12_RESOURCE_STATES currentBackBufferState) {
+void DeviceResources::EndFrame(D3D12_RESOURCE_STATES currentBackBufferState) {
 	if (currentBackBufferState != D3D12_RESOURCE_STATE_PRESENT) {
 		D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(
 			GetCurrentBackBuffer().get(), currentBackBufferState, D3D12_RESOURCE_STATE_PRESENT);
@@ -267,7 +268,7 @@ bool DeviceResources::Present(D3D12_RESOURCE_STATES currentBackBufferState) {
 	HRESULT hr = _commandList->Close();
 	if (FAILED(hr)) {
 		SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("关闭命令列表失败", hr));
-		return false;
+		return;
 	}
 
 	ID3D12CommandList* t[] = { _commandList.get() };
@@ -281,36 +282,28 @@ bool DeviceResources::Present(D3D12_RESOURCE_STATES currentBackBufferState) {
 
 	if (FAILED(hr)) {
 		SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("Present 失败", hr));
-		return false;
+		return;
 	}
 
-	if (!_MoveToNextFrame()) {
-		SPDLOG_LOGGER_ERROR(logger, "_MoveToNextFrame 失败");
-		return false;
+	const UINT64 currentFenceValue = _nextFenceValue++;
+	_fenceValues[_curFrameIndex] = currentFenceValue;
+	hr = _commandQueue->Signal(_fence.get(), currentFenceValue);
+	if (FAILED(hr)) {
+		SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("Signal 失败", hr));
+		return;
 	}
+	
+	_curFrameIndex = (_curFrameIndex + 1) % _fenceValues.size();
 
 	_frameStatistics.Tick();
-
-	return true;
 }
 
 bool DeviceResources::WaitForGPU() {
-	UINT64 fenceValue = _fenceValues[_backBufferIndex];
-	HRESULT hr = _commandQueue->Signal(_fence.get(), fenceValue);
-	if (FAILED(hr)) {
-		SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("Signal 失败", hr));
-		return false;
+	if (!_commandQueue || _fenceValues.empty()) {
+		return true;
 	}
 
-	hr = _fence->SetEventOnCompletion(fenceValue, _fenceEvent.get());
-	if (FAILED(hr)) {
-		SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("SetEventOnCompletion 失败", hr));
-		return false;
-	}
-
-	WaitForSingleObject(_fenceEvent.get(), INFINITE);
-
-	++_fenceValues[_backBufferIndex];
+	_WaitForFence(_fenceValues[_curFrameIndex]);
 	return true;
 }
 
@@ -348,7 +341,7 @@ bool DeviceResources::_CreateSwapChain() {
 	sd.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
 	sd.AlphaMode = DXGI_ALPHA_MODE_IGNORE;
 	sd.SampleDesc.Count = 1;
-	sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT | DXGI_USAGE_SHADER_INPUT;
+	sd.BufferUsage = 0;
 	sd.BufferCount = _backBufferCount;
 	// 使用 DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL 而不是 DXGI_SWAP_EFFECT_FLIP_DISCARD
 	// 不渲染四周（可能存在的）黑边，因此必须保证交换链缓冲区不被改变
@@ -385,7 +378,7 @@ bool DeviceResources::_CreateSwapChain() {
 		return false;
 	}
 
-	hr = _dxgiFactory->MakeWindowAssociation(App::GetInstance().GetHwndHost(), DXGI_MWA_NO_ALT_ENTER);
+	hr = _dxgiFactory->MakeWindowAssociation(App::GetInstance().GetHwndHost(), DXGI_MWA_NO_ALT_ENTER | DXGI_MWA_NO_PRINT_SCREEN);
 	if (FAILED(hr)) {
 		SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("MakeWindowAssociation 失败", hr));
 	}
@@ -438,28 +431,14 @@ bool DeviceResources::_CreateSwapChain() {
 	return true;
 }
 
-bool DeviceResources::_MoveToNextFrame() {
-	const UINT64 currentFenceValue = _fenceValues[_backBufferIndex];
-	HRESULT hr = _commandQueue->Signal(_fence.get(), currentFenceValue);
-	if (FAILED(hr)) {
-		SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("Signal 失败", hr));
-		return false;
-	}
-
-	_backBufferIndex = _swapChain->GetCurrentBackBufferIndex();
-
-	// 等待下一个帧缓冲区
-	if (_fence->GetCompletedValue() < _fenceValues[_backBufferIndex]) {
-		hr = _fence->SetEventOnCompletion(_fenceValues[_backBufferIndex], _fenceEvent.get());
+void DeviceResources::_WaitForFence(UINT64 waitValue) {
+	if (_fence->GetCompletedValue() < waitValue) {
+		HRESULT hr = _fence->SetEventOnCompletion(waitValue, _fenceEvent.get());
 		if (FAILED(hr)) {
 			SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("SetEventOnCompletion 失败", hr));
-			return false;
+			return;
 		}
-		
-		WaitForSingleObject(_fenceEvent.get(), INFINITE);
-	}
 
-	// 设置下一帧的 Fence 值
-	_fenceValues[_backBufferIndex] = currentFenceValue + 1;
-	return true;
+		WaitForSingleObject(_fenceEvent.get(), 1000);
+	}
 }

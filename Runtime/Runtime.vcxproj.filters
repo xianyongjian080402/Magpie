@@ -111,8 +111,16 @@
     <Filter Include="应用程序">
       <UniqueIdentifier>{03b14d85-c703-4e07-94ac-d7ef17b18cf1}</UniqueIdentifier>
     </Filter>
+    <Filter Include="着色器">
+      <UniqueIdentifier>{ff73658e-b7fb-4f55-ae4c-6b453501c120}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <Text Include="conanfile.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <CopyFileToFolders Include="FSR_EASU.hlsl">
+      <Filter>着色器</Filter>
+    </CopyFileToFolders>
   </ItemGroup>
 </Project>

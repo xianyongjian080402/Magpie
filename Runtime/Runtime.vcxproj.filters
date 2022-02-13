@@ -122,5 +122,8 @@
     <CopyFileToFolders Include="FSR_EASU.hlsl">
       <Filter>着色器</Filter>
     </CopyFileToFolders>
+    <CopyFileToFolders Include="FSR_RCAS.hlsl">
+      <Filter>着色器</Filter>
+    </CopyFileToFolders>
   </ItemGroup>
 </Project>

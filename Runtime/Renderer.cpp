@@ -314,11 +314,11 @@ void Renderer::Render() {
 
 	CD3DX12_TEXTURE_COPY_LOCATION dest(backBuffer.get(), 0);
 	CD3DX12_TEXTURE_COPY_LOCATION src(_outputTex.get(), 0);
-	CD3DX12_BOX box(0, 0, desc.Width, desc.Height);
+	CD3DX12_BOX box(0, 0, (LONG)desc.Width, (LONG)desc.Height);
 	commandList->CopyTextureRegion(
 		&dest,
-		(outputSize.cx - desc.Width) / 2,
-		(outputSize.cy - desc.Height) / 2,
+		UINT((outputSize.cx - desc.Width) / 2),
+		UINT((outputSize.cy - desc.Height) / 2),
 		0,
 		&src,
 		&box

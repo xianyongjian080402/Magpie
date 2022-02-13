@@ -140,6 +140,9 @@
       <VariableName>%(Filename)ShaderByteCode</VariableName>
       <HeaderFileOutput>%(RelativeDir)%(Filename).h</HeaderFileOutput>
     </FxCompile>
+    <CopyFileToFolders>
+      <DestinationFolders>$(OutDir)effects</DestinationFolders>
+    </CopyFileToFolders>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="App.h" />
@@ -190,7 +193,6 @@
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">4.0</ShaderModel>
       <FileType>Document</FileType>
-      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)effects</DestinationFolders>
     </CopyFileToFolders>
   </ItemGroup>
   <ItemGroup>

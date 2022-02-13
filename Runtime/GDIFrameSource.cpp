@@ -69,10 +69,13 @@ bool GDIFrameSource::Initialize() {
 		static_cast<UINT64>(_frameRect.right) - _frameRect.left,
 		static_cast<UINT64>(_frameRect.bottom) - _frameRect.top,
 		1,
-		1
+		1,
+		1,
+		0,
+		D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
 	);
 	HRESULT hr = App::GetInstance().GetDeviceResources().GetD3DDevice()->CreateCommittedResource(
-		&heapDesc, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_COPY_SOURCE, nullptr, IID_PPV_ARGS(_output.put()));
+		&heapDesc, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, nullptr, IID_PPV_ARGS(_output.put()));
 
 	D3D11_TEXTURE2D_DESC desc1{};
 	desc1.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
@@ -94,7 +97,13 @@ bool GDIFrameSource::Initialize() {
 	_d3d11Tex.try_as(_dxgiSurface);
 
 	D3D11_RESOURCE_FLAGS flags{};
-	hr = _d3d11On12Device->CreateWrappedResource(_output.get(), &flags, D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_COPY_SOURCE, IID_PPV_ARGS(_wrappedOutput.put()));
+	hr = _d3d11On12Device->CreateWrappedResource(
+		_output.get(),
+		&flags,
+		D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+		D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+		IID_PPV_ARGS(_wrappedOutput.put())
+	);
 
 	SPDLOG_LOGGER_INFO(logger, "GDIFrameSource 初始化完成");
 	return true;

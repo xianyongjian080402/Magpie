@@ -121,9 +121,9 @@ bool DesktopDuplicationFrameSource::Initialize() {
 	HRESULT hr = d3dDevice->CreateCommittedResource(&heapDesc, D3D12_HEAP_FLAG_SHARED,
 		&desc, D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(_sharedTex.put()));
 
-	desc.Flags = D3D12_RESOURCE_FLAG_NONE;
+	desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 	hr = d3dDevice->CreateCommittedResource(&heapDesc, D3D12_HEAP_FLAG_NONE, &desc,
-		D3D12_RESOURCE_STATE_COPY_SOURCE, nullptr, IID_PPV_ARGS(_output.put()));
+		D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, nullptr, IID_PPV_ARGS(_output.put()));
 	
 	d3dDevice->CreateFence(0, D3D12_FENCE_FLAG_SHARED, IID_PPV_ARGS(_fence.put()));
 
@@ -203,11 +203,11 @@ FrameSourceBase::UpdateState DesktopDuplicationFrameSource::CaptureFrame() {
 	auto commandList = dr.GetCommandList();
 
 	CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-			_output.get(), D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_COPY_DEST, 0);
+			_output.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_DEST, 0);
 	commandList->ResourceBarrier(1, &barrier);
 	dr.GetCommandList()->CopyResource(_output.get(), _sharedTex.get());
 	barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-			_output.get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_COPY_SOURCE, 0);
+			_output.get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, 0);
 	commandList->ResourceBarrier(1, &barrier);
 
 	return UpdateState::NewFrame;

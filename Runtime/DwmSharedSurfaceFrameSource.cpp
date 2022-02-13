@@ -62,10 +62,13 @@ bool DwmSharedSurfaceFrameSource::Initialize() {
 		static_cast<UINT64>(frameRect.right) - frameRect.left,
 		static_cast<UINT64>(frameRect.bottom) - frameRect.top,
 		1,
-		1
+		1,
+		1,
+		0,
+		D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
 	);
 	HRESULT hr = App::GetInstance().GetDeviceResources().GetD3DDevice()->CreateCommittedResource(
-		&heapDesc, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_COPY_SOURCE, nullptr, IID_PPV_ARGS(_output.put()));
+		&heapDesc, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, nullptr, IID_PPV_ARGS(_output.put()));
 	if (FAILED(hr)) {
 		SPDLOG_LOGGER_CRITICAL(logger, MakeComErrorMsg("创建 2D 纹理失败", hr));
 		return false;
@@ -105,7 +108,7 @@ FrameSourceBase::UpdateState DwmSharedSurfaceFrameSource::CaptureFrame() {
 		CD3DX12_RESOURCE_BARRIER::Transition(
 			sharedTexture.get(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_SOURCE, 0),
 		CD3DX12_RESOURCE_BARRIER::Transition(
-			_output.get(), D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_COPY_DEST, 0)
+			_output.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_DEST, 0)
 	};
 	commandList->ResourceBarrier((UINT)std::size(barriers), barriers);
 
@@ -114,7 +117,7 @@ FrameSourceBase::UpdateState DwmSharedSurfaceFrameSource::CaptureFrame() {
 	commandList->CopyTextureRegion(&dest, 0, 0, 0, &src, &_frameInWnd);
 
 	CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-			_output.get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_COPY_SOURCE, 0);
+			_output.get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, 0);
 	commandList->ResourceBarrier(1, &barrier);
 	
 	return UpdateState::NewFrame;

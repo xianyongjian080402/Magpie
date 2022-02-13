@@ -82,6 +82,7 @@
 #pragma comment(lib, "Magnification.lib")
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "d3d12.lib")
+#pragma comment(lib, "dxguid.lib")
 #pragma comment(lib, "windowsapp")
 #pragma comment(lib, "dwmapi.lib")
 #pragma comment(lib, "psapi.lib")

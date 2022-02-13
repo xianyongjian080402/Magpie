@@ -237,17 +237,20 @@ void DeviceResources::SafeReleaseFrameResource(winrt::com_ptr<IUnknown> resource
 	_frameResources[_curFrameIndex].push_back(std::move(resource));
 }
 
-void DeviceResources::BeginFrame() {
-	// 等待此帧缓冲区
-	_WaitForFence(_fenceValues[_curFrameIndex]);
-	_frameResources[_curFrameIndex].clear();
+void DeviceResources::BeginFrame(winrt::com_ptr<ID3D12PipelineState> initialState) {
+	bool isFirstFrame = _nextFenceValue == 1;
+
+	if (!isFirstFrame) {
+		// 等待此帧缓冲区
+		_WaitForFence(_fenceValues[_curFrameIndex]);
+		_frameResources[_curFrameIndex].clear();
+	}
 
 	WaitForSingleObject(_frameLatencyWaitableObject.get(), 1000);
 
 	_backBufferIndex = _swapChain->GetCurrentBackBufferIndex();
 
-	if (_firstFrame) {
-		_firstFrame = false;
+	if (isFirstFrame) {
 		return;
 	}
 
@@ -257,7 +260,7 @@ void DeviceResources::BeginFrame() {
 		return;
 	}
 
-	hr = _commandList->Reset(_commandAllocators[_curFrameIndex].get(), nullptr);
+	hr = _commandList->Reset(_commandAllocators[_curFrameIndex].get(), initialState.get());
 	if (FAILED(hr)) {
 		SPDLOG_LOGGER_ERROR(logger, MakeComErrorMsg("重置命令列表失败", hr));
 		return;
@@ -348,7 +351,7 @@ bool DeviceResources::_CreateSwapChain() {
 	sd.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
 	sd.AlphaMode = DXGI_ALPHA_MODE_IGNORE;
 	sd.SampleDesc.Count = 1;
-	sd.BufferUsage = 0;
+	sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
 	sd.BufferCount = _backBufferCount;
 	// 使用 DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL 而不是 DXGI_SWAP_EFFECT_FLIP_DISCARD
 	// 不渲染四周（可能存在的）黑边，因此必须保证交换链缓冲区不被改变

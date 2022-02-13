@@ -31,7 +31,7 @@ public:
 
     const FrameStatistics& GetFrameStatics() const noexcept { return _frameStatistics; }
 
-    void BeginFrame();
+    void BeginFrame(winrt::com_ptr<ID3D12PipelineState> initialState = nullptr);
 
     void EndFrame(D3D12_RESOURCE_STATES currentBackBufferState);
 
@@ -68,6 +68,4 @@ private:
     UINT _curFrameIndex = 0;
 
     FrameStatistics _frameStatistics;
-
-    bool _firstFrame = true;
 };
